@@ -1,0 +1,19 @@
+administer documents:
+  title: 'Administer documents'
+  restrict access: true
+view label any document:
+  title: 'View the label of any document'
+view label own document:
+  title: 'View the label of own documents'
+view any document:
+  title: 'View any document'
+view own document:
+  title: 'View own documents'
+update any document:
+  title: 'Update any document'
+update own document:
+  title: 'Update own documents'
+delete any document:
+  title: 'Delete any document'
+delete own document:
+  title: 'Delete own documents'

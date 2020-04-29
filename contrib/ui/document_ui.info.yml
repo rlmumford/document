@@ -1,0 +1,6 @@
+name: Document Interface
+description: Provides a visual interface for handling documents.
+type: module
+core_version_requirement: ^8 || 9
+dependencies:
+  - rlmumford: document

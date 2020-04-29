@@ -1,0 +1,14 @@
+default:
+  id: default
+  label: Defaykt
+  group: document
+  states:
+    current:
+      label: Current
+    archived:
+      label: Archived
+  transitions:
+    archive:
+      label: Archive
+      from: [current]
+      to: archived

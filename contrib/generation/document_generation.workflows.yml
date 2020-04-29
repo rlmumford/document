@@ -1,0 +1,20 @@
+generation:
+  id: generation
+  label: Generation
+  group: document
+  states:
+    draft:
+      label: Draft
+    current:
+      label: Current
+    archived:
+      label: Archived
+  transitions:
+    generate:
+      label: Generate
+      from: [draft]
+      to: current
+    archive:
+      label: Archive
+      from: [draft, current]
+      to: archived

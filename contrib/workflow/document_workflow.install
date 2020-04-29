@@ -1,0 +1,29 @@
+<?php
+
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+
+/**
+ * Implements hook_install().
+ */
+function document_workflow_install() {
+  $updater = \Drupal::entityDefinitionUpdateManager();
+  $updater->installFieldStorageDefinition(
+    'state',
+    'document',
+    'document_workflow',
+    BaseFieldDefinition::create('state')
+      ->setLabel(new TranslatableMarkup('Status'))
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE)
+  );
+  $updater->installFieldStorageDefinition(
+    'state_explanation',
+    'document',
+    'document_workflow',
+    BaseFieldDefinition::create('text_long')
+      ->setLabel(new TranslatableMarkup('Status Explanation'))
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE)
+  );
+}

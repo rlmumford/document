@@ -1,0 +1,26 @@
+<?php
+
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+
+/**
+ * Implements hook_entity_base_field_info().
+ */
+function document_workflow_entity_base_field_info(EntityTypeInterface $entity_type) {
+  $fields = [];
+
+  if ($entity_type->id() === 'document') {
+    $fields['state'] = BaseFieldDefinition::create('state')
+      ->setLabel(new TranslatableMarkup('Status'))
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE);
+
+    $fields['state_explanation'] = BaseFieldDefinition::create('text_long')
+      ->setLabel(new TranslatableMarkup('Status Explanation'))
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE);
+  }
+
+  return $fields;
+}

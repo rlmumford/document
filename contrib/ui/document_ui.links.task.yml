@@ -1,0 +1,8 @@
+document.view:
+  route_name: entity.document.canonical
+  title: 'View'
+  base_route: entity.document.canonical
+document.edit:
+  route_name: entity.document.edit_form
+  title: 'Edit'
+  base_route: entity.document.canonical

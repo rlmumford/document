@@ -1,0 +1,9 @@
+name: Document Generation
+description: Generate documents from html.
+type: module
+core_version_requirement: ^8 || 9
+dependencies:
+  - rlmumford:document
+  - rlmumford:document_workflow
+  - pdf_tools:pdf_tools
+  - entity:entity

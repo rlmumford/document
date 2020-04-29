@@ -1,0 +1,22 @@
+<?php
+
+use Drupal\Core\Entity\Routing\DefaultHtmlRouteProvider;
+
+/**
+ * Implements hook_entity_type_build().
+ *
+ * @param \Drupal\Core\Entity\EntityTypeInterface[] $entity_types
+ */
+function document_ui_entity_type_build(array &$entity_types) {
+  if ($type = $entity_types['document']) {
+    $type->setHandlerClass(
+      'route_provider',
+      [
+        'html' => DefaultHtmlRouteProvider::class,
+      ] + $type->getHandlerClass('route_provider')
+    );
+
+    $type->setLinkTemplate('canonical', '/document/{document}');
+    $type->setLinkTemplate('edit-form', '/document/{document}/edit');
+  }
+}

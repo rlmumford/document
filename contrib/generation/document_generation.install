@@ -1,0 +1,26 @@
+<?php
+
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\entity\BundleFieldDefinition;
+
+/**
+ * Implements hook_install().
+ */
+function document_generation_install() {
+  $updater = \Drupal::entityDefinitionUpdateManager();
+  $updater->installFieldStorageDefinition(
+    'pdf_style',
+    'document',
+    'document_generation',
+    BundleFieldDefinition::create('entity_reference')
+      ->setLabel(new TranslatableMarkup('Style'))
+      ->setSetting('target_type', 'pdf_style')
+  );
+  $updater->installFieldStorageDefinition(
+    'pdf_content',
+    'document',
+    'document_generation',
+    BundleFieldDefinition::create('text_long')
+      ->setLabel(new TranslatableMarkup('Content'))
+  );
+}

@@ -1,0 +1,49 @@
+<?php
+
+use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\StringTranslation\TranslatableMarkup;
+use Drupal\entity\BundleFieldDefinition;
+
+/**
+ * Implements hook_entity_bundle_field_info().
+ */
+function document_generation_entity_bundle_field_info(EntityTypeInterface $entity_type, $bundle, array $base_field_definitions) {
+  $fields = [];
+
+  if ($entity_type->id() == 'document') {
+    $fields['pdf_style'] = BundleFieldDefinition::create('entity_reference')
+      ->setLabel(new TranslatableMarkup('Style'))
+      ->setSetting('target_type', 'pdf_style')
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
+    $fields['pdf_content'] = BundleFieldDefinition::create('text_long')
+      ->setLabel(new TranslatableMarkup('Content'))
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+  }
+
+  return $fields;
+}
+
+/**
+ * Implements hook_entity_field_storage_info().
+ */
+function document_generation_entity_field_storage_info(EntityTypeInterface $entity_type) {
+  $storages = [];
+
+  if ($entity_type->id() == 'document') {
+    $storages['pdf_style'] = BundleFieldDefinition::create('entity_reference')
+      ->setLabel(new TranslatableMarkup('Style'))
+      ->setSetting('target_type', 'pdf_style')
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+
+    $storages['pdf_content'] = BundleFieldDefinition::create('text_long')
+      ->setLabel(new TranslatableMarkup('Content'))
+      ->setDisplayConfigurable('form', TRUE)
+      ->setDisplayConfigurable('view', TRUE);
+  }
+
+  return $storages;
+}

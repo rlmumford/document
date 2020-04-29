@@ -1,0 +1,7 @@
+name: Document
+description: 'Store & Manage Documents'
+type: module
+core_version_requirement: ^8.7.7 || ^9
+dependencies:
+  - drupal:file
+  - entity:entity
