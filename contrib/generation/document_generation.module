@@ -36,11 +36,15 @@ function document_generation_entity_field_storage_info(EntityTypeInterface $enti
     $storages['pdf_style'] = BundleFieldDefinition::create('entity_reference')
       ->setLabel(new TranslatableMarkup('Style'))
       ->setSetting('target_type', 'pdf_style')
+      ->setTargetEntityTypeId('document')
+      ->setName('pdf_style')
       ->setDisplayConfigurable('form', TRUE)
       ->setDisplayConfigurable('view', TRUE);
 
     $storages['pdf_content'] = BundleFieldDefinition::create('text_long')
       ->setLabel(new TranslatableMarkup('Content'))
+      ->setTargetEntityTypeId('document')
+      ->setName('pdf_content')
       ->setDisplayConfigurable('form', TRUE)
       ->setDisplayConfigurable('view', TRUE);
   }
