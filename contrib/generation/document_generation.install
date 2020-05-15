@@ -7,20 +7,25 @@ use Drupal\entity\BundleFieldDefinition;
  * Implements hook_install().
  */
 function document_generation_install() {
-  $updater = \Drupal::entityDefinitionUpdateManager();
-  $updater->installFieldStorageDefinition(
-    'pdf_style',
-    'document',
-    'document_generation',
-    BundleFieldDefinition::create('entity_reference')
-      ->setLabel(new TranslatableMarkup('Style'))
-      ->setSetting('target_type', 'pdf_style')
-  );
-  $updater->installFieldStorageDefinition(
-    'pdf_content',
-    'document',
-    'document_generation',
-    BundleFieldDefinition::create('text_long')
-      ->setLabel(new TranslatableMarkup('Content'))
-  );
+  /** @var \Drupal\Core\Field\FieldStorageDefinitionListenerInterface $field_storage_definition_listener */
+  $field_storage_definition_listener = \Drupal::service('field_storage_definition.listener');
+  /** @var \Drupal\Core\Field\FieldDefinitionListenerInterface $field_definition_listener */
+  $field_definition_listener = \Drupal::service('field_definition.listener');
+
+  $fields = [];
+  $fields['pdf_style'] = BundleFieldDefinition::create('entity_reference')
+    ->setLabel(new TranslatableMarkup('Style'))
+    ->setSetting('target_type', 'pdf_style');
+  $fields['pdf_content'] = BundleFieldDefinition::create('text_long')
+    ->setLabel(new TranslatableMarkup('Content'));
+
+  foreach ($fields as $name => $definition) {
+    /** @var \Drupal\entity\BundleFieldDefinition $definition */
+    $definition->setName($name);
+    $definition->setTargetEntityTypeId('document');
+    $definition->setProvider('document_generation');
+
+    $field_storage_definition_listener->onFieldStorageDefinitionCreate($definition);
+    $field_definition_listener->onFieldDefinitionCreate($definition);
+  }
 }
