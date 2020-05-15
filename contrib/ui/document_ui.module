@@ -13,9 +13,10 @@ function document_ui_entity_type_build(array &$entity_types) {
       'route_provider',
       [
         'html' => DefaultHtmlRouteProvider::class,
-      ] + $type->getHandlerClass('route_provider')
+      ] + ($type->getHandlerClass('route_provider') ?: [])
     );
 
+    $type->setLinkTemplate('add-form', '/document/add');
     $type->setLinkTemplate('canonical', '/document/{document}');
     $type->setLinkTemplate('edit-form', '/document/{document}/edit');
   }
