@@ -6,3 +6,8 @@ document.edit:
   route_name: entity.document.edit_form
   title: 'Edit'
   base_route: entity.document.canonical
+
+document_ui.document.config:
+  title: 'Documents'
+  route_name: document_ui.document.config
+  base_route: document_ui.document.config

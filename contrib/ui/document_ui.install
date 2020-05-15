@@ -1,0 +1,10 @@
+<?php
+
+/**
+ * Enable field_ui module.
+ */
+function document_ui_update_8001() {
+  if (!\Drupal::moduleHandler()->moduleExists('field_ui')) {
+    \Drupal::service('module_installer')->install(['field_ui']);
+  }
+}

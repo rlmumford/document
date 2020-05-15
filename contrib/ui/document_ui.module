@@ -19,5 +19,6 @@ function document_ui_entity_type_build(array &$entity_types) {
     $type->setLinkTemplate('add-form', '/document/add');
     $type->setLinkTemplate('canonical', '/document/{document}');
     $type->setLinkTemplate('edit-form', '/document/{document}/edit');
+    $type->set('field_ui_base_route', 'document_ui.document.config');
   }
 }

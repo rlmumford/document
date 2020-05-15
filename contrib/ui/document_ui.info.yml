@@ -4,3 +4,4 @@ type: module
 core_version_requirement: ^8 || 9
 dependencies:
   - rlmumford:document
+  - drupal:field_ui

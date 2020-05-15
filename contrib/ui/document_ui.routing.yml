@@ -1,0 +1,7 @@
+document_ui.document.config:
+  path: 'admin/structure/documents'
+  defaults:
+    _controller: '\Drupal\document_ui\Controller\ConfigurationController::overviewDocuments'
+    _title: 'Document Configuration'
+  requirements:
+    _permission: 'administer documents'

@@ -1,0 +1,5 @@
+document_ui.document.config:
+  title: 'Documents'
+  description: 'Configure Documents.'
+  parent: system.admin_structure
+  route_name: document_ui.document.config
