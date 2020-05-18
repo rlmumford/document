@@ -88,7 +88,7 @@ class Document extends ContentEntityBase implements EntityOwnerInterface, Entity
     $fields['is_archived'] = BaseFieldDefinition::create('boolean')
       ->setLabel(new TranslatableMarkup('Archived?'))
       ->setRevisionable(TRUE)
-      ->setDefaultValue(TRUE)
+      ->setDefaultValue(FALSE)
       ->setDisplayOptions('form', [
         'type' => 'boolean_checkbox',
         'settings' => [
