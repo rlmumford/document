@@ -73,7 +73,7 @@ class DocumentPDFGenerationSubscriber implements EventSubscriberInterface {
       'pdf_style' => $document->pdf_style->entity,
       '__destination' => $field_def->getSetting('uri_scheme', 'private'). '://'
         . $field_def->getSetting('file_directory', 'documents')
-        . '/' . preg_replace('/[^A-z0-9_]+/', '-', $document->label->value) . '.pdf',
+        . '/' . preg_replace('/[^a-z0-9_-]+/i', '-', $document->label->value) . '.pdf',
     ];
 
     $uri = $this->generator->renderArrayToPDF(
