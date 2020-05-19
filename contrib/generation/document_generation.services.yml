@@ -1,0 +1,6 @@
+services:
+  document_generation.pdf_generation_subscriber:
+    class: Drupal\document_generation\EventSubscriber\DocumentPDFGenerationSubscriber
+    arguments: ['@pdf_tools.generator', '@entity_type.manager', '@file.mime_type.guesser', '@file_system']
+    tags:
+      - {name: event_subscriber }
