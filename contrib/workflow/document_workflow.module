@@ -13,7 +13,6 @@ function document_workflow_entity_base_field_info(EntityTypeInterface $entity_ty
   if ($entity_type->id() === 'document') {
     $fields['state'] = BaseFieldDefinition::create('state')
       ->setLabel(new TranslatableMarkup('Status'))
-      ->setSetting('workflow', 'generation')
       ->setDisplayConfigurable('view', TRUE)
       ->setDisplayConfigurable('form', TRUE);
 

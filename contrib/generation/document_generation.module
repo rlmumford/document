@@ -51,3 +51,12 @@ function document_generation_entity_field_storage_info(EntityTypeInterface $enti
 
   return $storages;
 }
+
+/**
+ * Implements hook_entity_base_field_info_alter().
+ */
+function document_generation_entity_base_field_info_alter(&$fields, EntityTypeInterface $entity_type) {
+  if ($entity_type->id() == 'document' && !empty($fields['state'])) {
+    $fields['state']->setSetting('workflow', 'generation');
+  }
+}
