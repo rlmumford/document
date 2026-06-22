@@ -7,7 +7,7 @@ use Drupal\Core\File\FileSystemInterface;
 use Drupal\pdf_tools\PDFGeneratorInterface;
 use Drupal\state_machine\Event\WorkflowTransitionEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
-use Symfony\Component\HttpFoundation\File\MimeType\MimeTypeGuesserInterface;
+use Symfony\Component\Mime\MimeTypeGuesserInterface;
 
 class DocumentPDFGenerationSubscriber implements EventSubscriberInterface {
 
@@ -91,7 +91,7 @@ class DocumentPDFGenerationSubscriber implements EventSubscriberInterface {
       'uid' => \Drupal::currentUser()->id(),
       'status' => 1,
       'filename' => basename($uri),
-      'filemime' => $this->mimeTypeGuesser->guess($uri),
+      'filemime' => $this->mimeTypeGuesser->guessMimeType($uri),
     ]);
 
     $this->fileSystem->chmod($file->getFileUri());
