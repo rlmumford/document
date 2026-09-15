@@ -1,0 +1,13 @@
+document.type.*:
+  type: config_entity
+  label: 'Document type'
+  mapping:
+    id:
+      type: machine_name
+      label: 'Machine name'
+    label:
+      type: label
+      label: 'Name'
+    description:
+      type: text
+      label: 'Description'

@@ -1,0 +1,5 @@
+entity.document_type.add_form:
+  route_name: entity.document_type.add_form
+  title: 'Add document type'
+  appears_on:
+    - entity.document_type.collection

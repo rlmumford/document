@@ -1,0 +1,13 @@
+entity.document.collection:
+  title: 'Documents'
+  route_name: entity.document.collection
+  description: 'Files people treat as one thing.'
+  parent: system.admin_content
+  weight: 10
+
+entity.document_type.collection:
+  title: 'Document types'
+  route_name: entity.document_type.collection
+  description: 'Manage the kinds of document.'
+  parent: system.admin_structure
+  weight: 10

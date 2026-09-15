@@ -3,32 +3,56 @@
 namespace Drupal\document\Entity;
 
 use Drupal\Core\Entity\ContentEntityBase;
-use Drupal\Core\Entity\EntityChangedInterface;
 use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
+use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\user\EntityOwnerInterface;
 use Drupal\user\EntityOwnerTrait;
 
 /**
- * Class Document
+ * A file people treat as one thing.
+ *
+ * The additions here are forward-ported from CounselKit's D7 ck_document, which
+ * reached this shape over a decade of a business whose work is almost entirely
+ * documents. Each exists because a file could not answer a question somebody
+ * kept asking:
+ *
+ * - **type**, because a CV and a bank statement share nothing but a file field;
+ * - **status**, because "we asked for this and it has not arrived" is a state a
+ *   document is in, and a file cannot represent the absence of itself;
+ * - **files**, because a document assembled from six photographs of one bank
+ *   statement is one document, and discarding the six destroys the only copy of
+ *   each;
+ * - **analysis_data**, because what has been worked out about a document -
+ *   extracted text, a parse, a model's answer - belongs with it and not in a
+ *   cache that can be cleared.
  *
  * @ContentEntityType(
  *   id = "document",
  *   label = @Translation("Document"),
+ *   label_collection = @Translation("Documents"),
  *   label_singular = @Translation("document"),
  *   label_plural = @Translation("documents"),
  *   label_count = @PluralTranslation(
  *     singular = "@count document",
  *     plural = "@count documents"
  *   ),
+ *   bundle_label = @Translation("Document type"),
  *   handlers = {
  *     "storage" = "Drupal\Core\Entity\Sql\SqlContentEntityStorage",
+ *     "view_builder" = "Drupal\Core\Entity\EntityViewBuilder",
+ *     "list_builder" = "Drupal\document\DocumentListBuilder",
  *     "access" = "Drupal\document\Entity\DocumentAccessControlHandler",
  *     "views_data" = "Drupal\views\EntityViewsData",
  *     "form" = {
- *       "default" = "Drupal\Core\Entity\ContentEntityForm"
+ *       "default" = "Drupal\Core\Entity\ContentEntityForm",
+ *       "add" = "Drupal\Core\Entity\ContentEntityForm",
+ *       "edit" = "Drupal\Core\Entity\ContentEntityForm",
+ *       "delete" = "Drupal\Core\Entity\ContentEntityDeleteForm",
+ *     },
+ *     "route_provider" = {
+ *       "html" = "Drupal\Core\Entity\Routing\AdminHtmlRouteProvider",
  *     },
  *   },
  *   base_table = "document",
@@ -37,17 +61,27 @@ use Drupal\user\EntityOwnerTrait;
  *   entity_keys = {
  *     "id" = "id",
  *     "revision" = "vid",
+ *     "bundle" = "type",
  *     "uuid" = "uuid",
  *     "label" = "label",
  *     "owner" = "owner",
  *   },
- * );
- *
- * @package Drupal\document\Entity
+ *   bundle_entity_type = "document_type",
+ *   field_ui_base_route = "entity.document_type.edit_form",
+ *   links = {
+ *     "canonical" = "/document/{document}",
+ *     "add-page" = "/document/add",
+ *     "add-form" = "/document/add/{document_type}",
+ *     "edit-form" = "/document/{document}/edit",
+ *     "delete-form" = "/document/{document}/delete",
+ *     "collection" = "/admin/content/documents",
+ *   },
+ * )
  */
-class Document extends ContentEntityBase implements EntityOwnerInterface, EntityChangedInterface {
-  use EntityOwnerTrait;
+class Document extends ContentEntityBase implements DocumentInterface {
+
   use EntityChangedTrait;
+  use EntityOwnerTrait;
 
   /**
    * {@inheritdoc}
@@ -75,15 +109,64 @@ class Document extends ContentEntityBase implements EntityOwnerInterface, Entity
     $fields['changed'] = BaseFieldDefinition::create('changed')
       ->setLabel(new TranslatableMarkup('Changed'));
 
+    // The document as one usable thing. Files are given to us in `files` and
+    // then composed into this: several photographs of one bank statement
+    // become one readable PDF, and the photographs stay where they are.
     $fields['file'] = BaseFieldDefinition::create('file')
       ->setRevisionable(TRUE)
       ->setLabel(new TranslatableMarkup('File'))
       ->setDescription(new TranslatableMarkup('Please upload the file.'))
       ->setSetting('uri_scheme', in_array('private', stream_get_wrappers()) ? 'private' : 'public')
-      ->setSetting('file_extensions', 'pdf txt doc jpg png bmp')
+      ->setSetting('file_extensions', 'pdf txt doc docx odt jpg png bmp')
       ->setSetting('file_directory', 'documents')
       ->setDisplayConfigurable('view', TRUE)
       ->setDisplayConfigurable('form', TRUE);
+
+    // What it is made of, as given to us. Composing them into `file` must not
+    // destroy the originals: a composition can be wrong, a page can be
+    // missing, and the only way to find out afterwards is to still have what
+    // came in.
+    $fields['files'] = BaseFieldDefinition::create('file')
+      ->setRevisionable(TRUE)
+      ->setLabel(new TranslatableMarkup('Files'))
+      ->setDescription(new TranslatableMarkup('The files this document is made of, as they were given to us.'))
+      ->setCardinality(FieldStorageDefinitionInterface::CARDINALITY_UNLIMITED)
+      ->setSetting('uri_scheme', in_array('private', stream_get_wrappers()) ? 'private' : 'public')
+      ->setSetting('file_extensions', 'pdf txt doc docx odt jpg png bmp')
+      ->setSetting('file_directory', 'documents')
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE);
+
+    // A list rather than a workflow: the transitions differ by document type
+    // and by whose document it is, and baking one set into a shared module
+    // decides that for everybody.
+    $fields['status'] = BaseFieldDefinition::create('list_string')
+      ->setRevisionable(TRUE)
+      ->setLabel(new TranslatableMarkup('Status'))
+      ->setRequired(TRUE)
+      ->setSetting('allowed_values', [
+        'needed' => (string) new TranslatableMarkup('Needed'),
+        'not_needed' => (string) new TranslatableMarkup('Not required'),
+        'received' => (string) new TranslatableMarkup('Received'),
+        'refused' => (string) new TranslatableMarkup('Refused'),
+        'approved' => (string) new TranslatableMarkup('Approved'),
+        'rejected' => (string) new TranslatableMarkup('Rejected'),
+        'expired' => (string) new TranslatableMarkup('Expired'),
+        'superseded' => (string) new TranslatableMarkup('Superseded'),
+      ])
+      ->setDefaultValue('needed')
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE);
+
+    // Whatever has been worked out about the document, with what produced it.
+    // A map, so it is an array in PHP and serialized in storage - which means
+    // it is not queryable. CounselKit used a real JSON column and can query it;
+    // nothing here needs to yet, and the day something does, the column type is
+    // the change rather than the shape of the data.
+    $fields['analysis_data'] = BaseFieldDefinition::create('map')
+      ->setRevisionable(TRUE)
+      ->setLabel(new TranslatableMarkup('Analysis'))
+      ->setDescription(new TranslatableMarkup('What has been worked out about this document, and by what.'));
 
     $fields['is_archived'] = BaseFieldDefinition::create('boolean')
       ->setLabel(new TranslatableMarkup('Archived?'))
@@ -105,6 +188,62 @@ class Document extends ContentEntityBase implements EntityOwnerInterface, Entity
       ->setDisplayConfigurable('form', TRUE);
 
     return $fields;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getStatus(): string {
+    return (string) $this->get('status')->value;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setStatus(string $status) {
+    $this->set('status', $status);
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getFile() {
+    return $this->get('file')->entity;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getFiles(): array {
+    return $this->get('files')->referencedEntities();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getAnalysis(?string $key = NULL) {
+    // MapItem::setValue() stores the array as given and getValue() hands it
+    // straight back - there is no wrapping property to strip, whatever the
+    // rest of the Field API leads you to expect.
+    $item = $this->get('analysis_data')->first();
+    $data = $item ? $item->getValue() : [];
+    $data = is_array($data) ? $data : [];
+
+    if ($key === NULL) {
+      return $data;
+    }
+    return $data[$key] ?? NULL;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setAnalysis(string $key, $value) {
+    $data = $this->getAnalysis() ?: [];
+    $data[$key] = $value;
+    $this->set('analysis_data', $data);
+    return $this;
   }
 
 }

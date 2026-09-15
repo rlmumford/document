@@ -1,0 +1,6 @@
+langcode: en
+status: true
+dependencies: {  }
+id: general
+label: General
+description: 'A document with no particular kind. Add a type of your own before this one accumulates everything.'
