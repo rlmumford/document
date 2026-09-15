@@ -48,6 +48,31 @@ interface DocumentInterface extends ContentEntityInterface, EntityChangedInterfa
   public function getFiles(): array;
 
   /**
+   * What the giver said about whether this contains special-category data.
+   *
+   * @return bool|null
+   *   TRUE or FALSE if they were asked, NULL if nobody ever has. The three are
+   *   different: never asked is not the same as told no, and only the second
+   *   is something to rely on.
+   */
+  public function declaredSpecialCategory(): ?bool;
+
+  /**
+   * Records what they said, and what they were asked.
+   *
+   * @param bool $contains
+   *   Their answer.
+   * @param string $question
+   *   The exact wording they answered, stored rather than referenced - an
+   *   answer means nothing without the question, and the question may change.
+   * @param string|null $when
+   *   When, in storage format. Defaults to now.
+   *
+   * @return $this
+   */
+  public function declareSpecialCategory(bool $contains, string $question, ?string $when = NULL);
+
+  /**
    * Gets what has been worked out about this document.
    *
    * @param string|null $key
