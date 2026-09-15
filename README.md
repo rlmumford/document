@@ -93,3 +93,15 @@ sent, say — still resolves to what it actually sent.
 Revisions carry a log: who made them, when, and why. Without that, "there are
 four versions of this" answers nothing, and the question asked of a document
 years later is always who changed it and what they were doing.
+
+The log is deliberately **not** inherited. `revision_log` is a revisionable
+field like any other, so loading a document and asking for a new revision
+carries the previous message forward untouched - and every revision then claims
+the reason given for the first one that had a reason. That is worse than an
+empty log: an empty log says nobody recorded why, an inherited one says
+something false. A message written for this revision differs from the loaded
+one and is kept; anything else is cleared.
+
+Who and when are stamped on every new revision, not only the ones made through
+a form - otherwise a revision created by an update hook or a migration has no
+author and no date.

@@ -4,6 +4,7 @@ namespace Drupal\document\Entity;
 
 use Drupal\Core\Entity\ContentEntityBase;
 use Drupal\Core\Entity\EntityChangedTrait;
+use Drupal\Core\Entity\EntityStorageInterface;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Entity\RevisionLogEntityTrait;
 use Drupal\Core\Field\BaseFieldDefinition;
@@ -223,6 +224,39 @@ class Document extends ContentEntityBase implements DocumentInterface {
       ->setDisplayConfigurable('form', TRUE);
 
     return $fields;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function preSave(EntityStorageInterface $storage) {
+    parent::preSave($storage);
+
+    if (!$this->isNewRevision()) {
+      return;
+    }
+
+    // Stamp who and when. Without this only a form sets them, so a revision
+    // created by an update hook, a migration or any other code has a log with
+    // no author and no date - which is most of what a log is for.
+    if (!$this->getRevisionUserId()) {
+      $this->setRevisionUserId((int) \Drupal::currentUser()->id());
+    }
+    $this->setRevisionCreationTime(\Drupal::time()->getRequestTime());
+
+    // And do not let the previous revision's reason become this one's.
+    //
+    // revision_log is a revisionable field like any other, so loading a
+    // document and asking for a new revision carries the old message forward
+    // untouched. Every revision then claims the reason given for the first one
+    // that had a reason, which is worse than an empty log: an empty log says
+    // nobody recorded why, and an inherited one says something false.
+    //
+    // A message that differs from the loaded revision's was written for this
+    // one and is left alone.
+    if (isset($this->original) && $this->getRevisionLogMessage() === $this->original->getRevisionLogMessage()) {
+      $this->setRevisionLogMessage(NULL);
+    }
   }
 
   /**
