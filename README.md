@@ -95,12 +95,18 @@ four versions of this" answers nothing, and the question asked of a document
 years later is always who changed it and what they were doing.
 
 The log is deliberately **not** inherited. `revision_log` is a revisionable
-field like any other, so loading a document and asking for a new revision
-carries the previous message forward untouched - and every revision then claims
-the reason given for the first one that had a reason. That is worse than an
-empty log: an empty log says nobody recorded why, an inherited one says
-something false. A message written for this revision differs from the loaded
-one and is kept; anything else is cleared.
+field like any other, so loading a document and asking for a new revision would
+carry the previous message forward untouched - and every revision would then
+claim the reason given for the first one that had a reason. That is worse than
+an empty log: an empty log says nobody recorded why, an inherited one says
+something false.
+
+So `setRevisionLogMessage()` **stages** a message rather than writing it, and
+`preSave()` puts whatever was staged onto the revision being written - nothing,
+if nothing was staged. The field itself goes on saying what was actually stored,
+so loading a document and reading its log gives the reason the current revision
+was made, which is the only thing anybody wants from it.
+`getPendingRevisionLogMessage()` reads what is staged, if you need it.
 
 Who and when are stamped on every new revision, not only the ones made through
 a form - otherwise a revision created by an update hook or a migration has no

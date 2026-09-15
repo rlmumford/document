@@ -98,6 +98,18 @@ class Document extends ContentEntityBase implements DocumentInterface {
   use RevisionLogEntityTrait;
 
   /**
+   * The log message for the revision about to be written, if one was given.
+   *
+   * Held here rather than on the field, so that the field keeps saying what was
+   * stored. Loading a document and reading its revision log gives the reason
+   * the current revision was made - which is the only thing anybody wants from
+   * it - while setting a message stages one for the revision being written.
+   *
+   * @var string|null
+   */
+  protected $pendingRevisionLog;
+
+  /**
    * {@inheritdoc}
    */
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type) {
@@ -244,19 +256,41 @@ class Document extends ContentEntityBase implements DocumentInterface {
     }
     $this->setRevisionCreationTime(\Drupal::time()->getRequestTime());
 
-    // And do not let the previous revision's reason become this one's.
+    // Whatever was staged for this revision, and nothing if nothing was.
     //
     // revision_log is a revisionable field like any other, so loading a
-    // document and asking for a new revision carries the old message forward
-    // untouched. Every revision then claims the reason given for the first one
-    // that had a reason, which is worse than an empty log: an empty log says
-    // nobody recorded why, and an inherited one says something false.
+    // document and asking for a new revision would otherwise carry the old
+    // message forward untouched, and every revision would claim the reason
+    // given for the first one that had a reason. That is worse than an empty
+    // log: an empty log says nobody recorded why, an inherited one says
+    // something false.
     //
-    // A message that differs from the loaded revision's was written for this
-    // one and is left alone.
-    if (isset($this->original) && $this->getRevisionLogMessage() === $this->original->getRevisionLogMessage()) {
-      $this->setRevisionLogMessage(NULL);
-    }
+    // Staging it rather than comparing against the previous value means intent
+    // is explicit - a message is written for this revision or there is none -
+    // and the field goes on saying what was actually stored until the moment it
+    // is replaced.
+    $this->set('revision_log', $this->pendingRevisionLog);
+    $this->pendingRevisionLog = NULL;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function setRevisionLogMessage($revision_log_message) {
+    // Staged, not written. See $pendingRevisionLog.
+    $this->pendingRevisionLog = $revision_log_message;
+    return $this;
+  }
+
+  /**
+   * The message staged for the revision about to be written.
+   *
+   * @return string|null
+   *   The staged message, or NULL if none was given. Distinct from
+   *   getRevisionLogMessage(), which says why the *current* revision was made.
+   */
+  public function getPendingRevisionLogMessage(): ?string {
+    return $this->pendingRevisionLog;
   }
 
   /**
