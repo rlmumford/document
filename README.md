@@ -54,16 +54,26 @@ so next time the list is a choice rather than three files called `document.pdf`.
 Configure it with the document type new uploads become, and the extensions and
 size you will accept.
 
-## `owner` and `about`
+It serves both `entity_reference` and `entity_reference_revisions`. On a revision
+field it records which version of the document was chosen, so replacing a file
+later does not rewrite what was already sent somewhere.
 
-The owner is whoever provided the document and is answerable for it. `about` is
-whose life it describes. Usually the same person; occasionally the whole point —
-a case worker scanning a client's bank statement, a recruiter uploading somebody
+## `owner` and `person`
+
+The owner is whoever provided the document and is answerable for it. `person` is
+whose life it describes. Usually the same; occasionally the whole point — a case
+worker scanning a client's bank statement, a recruiter uploading somebody
 else's CV.
 
-`subjectId()` reads `about`, falling back to the owner where nobody said
+Named for what it holds rather than for the relationship. A document can be
+about a bank account, a property, a company; "about" would have to mean all of
+them and so would mean nothing, and one field cannot hold them anyway without
+`dynamic_entity_reference`. Those get fields of their own when something needs
+them.
+
+`getPersonId()` reads `person`, falling back to the owner where nobody said
 otherwise, and `document_selector` offers documents on the same basis. That
-fallback is why `about` is left empty rather than defaulted: "nobody said" has
+fallback is why `person` is left empty rather than defaulted: "nobody said" has
 to stay distinguishable from "it is theirs", or the recruiter case silently
 becomes the recruiter's own document.
 

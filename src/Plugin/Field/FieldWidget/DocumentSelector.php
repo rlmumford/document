@@ -29,7 +29,8 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
  *   id = "document_selector",
  *   label = @Translation("Document: choose or upload"),
  *   field_types = {
- *     "entity_reference"
+ *     "entity_reference",
+ *     "entity_reference_revisions"
  *   }
  * )
  */
@@ -216,16 +217,17 @@ class DocumentSelector extends WidgetBase {
     }
 
     $storage = $this->entityTypeManager->getStorage('document');
-    // By who it is about, not who uploaded it, and this is the query form of
-    // DocumentInterface::subjectId(). A recruiter who uploaded a candidate's CV
-    // owns that document while the candidate is who it is about: the candidate
-    // must be offered it back and the recruiter must not be, so an OR across
-    // both columns would be wrong in exactly the case the field exists for.
+    // By whose document it is, not who uploaded it, and this is the query form
+    // of DocumentInterface::getPersonId(). A recruiter who uploaded a
+    // candidate's CV owns that document while the candidate is the person it is
+    // about: the candidate must be offered it back and the recruiter must not
+    // be, so an OR across both columns would be wrong in exactly the case the
+    // field exists for.
     $query = $storage->getQuery()->accessCheck(TRUE);
     $query->condition($query->orConditionGroup()
-      ->condition('about', $this->currentUser->id())
+      ->condition('person', $this->currentUser->id())
       ->condition($query->andConditionGroup()
-        ->notExists('about')
+        ->notExists('person')
         ->condition('owner', $this->currentUser->id())))
       ->condition('is_archived', TRUE, '<>')
       ->sort('changed', 'DESC')
@@ -248,20 +250,50 @@ class DocumentSelector extends WidgetBase {
   public function massageFormValues(array $values, array $form, FormStateInterface $form_state) {
     foreach ($values as $delta => $value) {
       if (($value['target_id'] ?? NULL) !== static::UPLOAD) {
-        $values[$delta] = ['target_id' => $value['target_id'] ?: NULL];
+        $document = $value['target_id']
+          ? $this->entityTypeManager->getStorage('document')->load($value['target_id'])
+          : NULL;
+        $values[$delta] = $this->reference($document);
         continue;
       }
 
       $fid = reset($value['upload']) ?: NULL;
-      if (!$fid) {
-        $values[$delta] = ['target_id' => NULL];
-        continue;
-      }
-
-      $values[$delta] = ['target_id' => $this->createDocument($fid, $value['label'] ?? '')->id()];
+      $values[$delta] = $fid
+        ? $this->reference($this->createDocument($fid, $value['label'] ?? ''))
+        : $this->reference(NULL);
     }
 
     return $values;
+  }
+
+  /**
+   * Builds the reference value, with a revision where the field wants one.
+   *
+   * The same widget serves entity_reference and entity_reference_revisions,
+   * because the difference is not one a person filling in a form should have to
+   * care about - but it matters entirely to what gets stored. A revision
+   * reference records *which version* of the document was chosen, so replacing
+   * a CV next year does not rewrite what an employer was sent; leaving
+   * target_revision_id off such a field stores a reference that resolves to
+   * nothing.
+   *
+   * @param \Drupal\document\Entity\DocumentInterface|null $document
+   *   The chosen document, or NULL.
+   *
+   * @return array
+   *   The field value.
+   */
+  protected function reference($document): array {
+    if (!$document) {
+      return ['target_id' => NULL];
+    }
+
+    $value = ['target_id' => $document->id()];
+    if ($this->fieldDefinition->getType() === 'entity_reference_revisions') {
+      $value['target_revision_id'] = $document->getRevisionId();
+    }
+
+    return $value;
   }
 
   /**
@@ -292,6 +324,9 @@ class DocumentSelector extends WidgetBase {
       'label' => $label !== '' ? $label : ($file ? $file->getFilename() : (string) new TranslatableMarkup('Untitled')),
       'status' => 'received',
       'owner' => $this->currentUser->id(),
+      // Uploading your own CV makes you both; a recruiter uploading somebody
+      // else's sets this afterwards, which is the case the field exists for.
+      'person' => $this->currentUser->id(),
       'file' => ['target_id' => $fid],
       'files' => [['target_id' => $fid]],
     ]);

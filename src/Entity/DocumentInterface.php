@@ -48,18 +48,18 @@ interface DocumentInterface extends ContentEntityInterface, EntityChangedInterfa
   public function getFiles(): array;
 
   /**
-   * Whose document this is.
+   * The person this document is about.
    *
    * The owner is whoever provided it and is answerable for it; this is whose
    * life it describes. A case worker scanning a client's bank statement or a
    * recruiter uploading somebody else's CV makes them different, and that is
    * the case worth getting right - offering a document back to the wrong
-   * person is the failure this distinction prevents.
+   * person is the failure this prevents.
    *
    * @return int|null
    *   The user id, falling back to the owner where nobody said otherwise.
    */
-  public function subjectId(): ?int;
+  public function getPersonId(): ?int;
 
   /**
    * Gets what has been worked out about this document.

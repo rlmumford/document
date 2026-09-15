@@ -103,18 +103,23 @@ class Document extends ContentEntityBase implements DocumentInterface {
       ->setDisplayConfigurable('view', TRUE)
       ->setDisplayConfigurable('form', TRUE);
 
-    // Who this document is about, as distinct from who uploaded it. A case
-    // worker scanning a client's bank statement, a recruiter typing up somebody
-    // else's CV: the owner is whoever put it there and is answerable for it,
-    // and this is whose life it describes. Usually the same person, and
-    // occasionally the whole point.
+    // The person this document is about, as distinct from whoever uploaded it.
+    // A case worker scanning a client's bank statement, a recruiter typing up
+    // somebody else's CV: the owner put it there and is answerable for it, and
+    // this is whose life it describes.
+    //
+    // Named for what it holds rather than for the relationship. A document can
+    // be about a bank account, a property, a company - "about" would have to
+    // mean all of them and so would mean nothing, and a single field cannot
+    // hold them anyway without dynamic_entity_reference. Those get fields of
+    // their own when something needs them; this one is the person.
     //
     // Left empty rather than defaulted to the owner, so "nobody said" stays
-    // distinguishable from "it is theirs" - see subjectId().
-    $fields['about'] = BaseFieldDefinition::create('entity_reference')
+    // distinguishable from "it is theirs" - see getPersonId().
+    $fields['person'] = BaseFieldDefinition::create('entity_reference')
       ->setRevisionable(TRUE)
-      ->setLabel(new TranslatableMarkup('About'))
-      ->setDescription(new TranslatableMarkup('Whose document this is, if that is not the person who provided it.'))
+      ->setLabel(new TranslatableMarkup('Person'))
+      ->setDescription(new TranslatableMarkup('Whose document this is, where that is not the person who provided it.'))
       ->setSetting('target_type', 'user')
       ->setDisplayConfigurable('view', TRUE)
       ->setDisplayConfigurable('form', TRUE);
@@ -238,12 +243,12 @@ class Document extends ContentEntityBase implements DocumentInterface {
   /**
    * {@inheritdoc}
    */
-  public function subjectId(): ?int {
+  public function getPersonId(): ?int {
     // Falls back to the owner, because most documents are about the person
     // who gave them to us, and making every caller write that fallback is how
     // half of them come to forget it.
-    $about = $this->get('about')->target_id;
-    return $about !== NULL ? (int) $about : ($this->getOwnerId() ?: NULL);
+    $person = $this->get('person')->target_id;
+    return $person !== NULL ? (int) $person : ($this->getOwnerId() ?: NULL);
   }
 
   /**
