@@ -216,9 +216,17 @@ class DocumentSelector extends WidgetBase {
     }
 
     $storage = $this->entityTypeManager->getStorage('document');
-    $query = $storage->getQuery()
-      ->accessCheck(TRUE)
-      ->condition('owner', $this->currentUser->id())
+    // By who it is about, not who uploaded it, and this is the query form of
+    // DocumentInterface::subjectId(). A recruiter who uploaded a candidate's CV
+    // owns that document while the candidate is who it is about: the candidate
+    // must be offered it back and the recruiter must not be, so an OR across
+    // both columns would be wrong in exactly the case the field exists for.
+    $query = $storage->getQuery()->accessCheck(TRUE);
+    $query->condition($query->orConditionGroup()
+      ->condition('about', $this->currentUser->id())
+      ->condition($query->andConditionGroup()
+        ->notExists('about')
+        ->condition('owner', $this->currentUser->id())))
       ->condition('is_archived', TRUE, '<>')
       ->sort('changed', 'DESC')
       ->range(0, 20);

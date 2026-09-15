@@ -2,15 +2,12 @@
 
 namespace Drupal\document\Entity;
 
-use Drupal\Core\Datetime\DrupalDateTime;
 use Drupal\Core\Entity\ContentEntityBase;
 use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityTypeInterface;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
-use Drupal\datetime\Plugin\Field\FieldType\DateTimeItem;
-use Drupal\datetime\Plugin\Field\FieldType\DateTimeItemInterface;
 use Drupal\user\EntityOwnerTrait;
 
 /**
@@ -106,6 +103,22 @@ class Document extends ContentEntityBase implements DocumentInterface {
       ->setDisplayConfigurable('view', TRUE)
       ->setDisplayConfigurable('form', TRUE);
 
+    // Who this document is about, as distinct from who uploaded it. A case
+    // worker scanning a client's bank statement, a recruiter typing up somebody
+    // else's CV: the owner is whoever put it there and is answerable for it,
+    // and this is whose life it describes. Usually the same person, and
+    // occasionally the whole point.
+    //
+    // Left empty rather than defaulted to the owner, so "nobody said" stays
+    // distinguishable from "it is theirs" - see subjectId().
+    $fields['about'] = BaseFieldDefinition::create('entity_reference')
+      ->setRevisionable(TRUE)
+      ->setLabel(new TranslatableMarkup('About'))
+      ->setDescription(new TranslatableMarkup('Whose document this is, if that is not the person who provided it.'))
+      ->setSetting('target_type', 'user')
+      ->setDisplayConfigurable('view', TRUE)
+      ->setDisplayConfigurable('form', TRUE);
+
     $fields['created'] = BaseFieldDefinition::create('created')
       ->setLabel(new TranslatableMarkup('Created'));
 
@@ -171,39 +184,6 @@ class Document extends ContentEntityBase implements DocumentInterface {
       ->setLabel(new TranslatableMarkup('Analysis'))
       ->setDescription(new TranslatableMarkup('What has been worked out about this document, and by what.'));
 
-    // Whether this document contains special-category data - health, religious
-    // belief, and the rest of the Article 9 list.
-    //
-    // A property of the document, not of any one use of it. The same CV sent to
-    // three employers contains what it contains, and answering the question
-    // once per application means asking the same person about the same file
-    // over and over, with nothing noticing if they answer differently each
-    // time. Recorded here, an inconsistent answer about one document becomes
-    // visible.
-    //
-    // Nullable on purpose: NULL means nobody has been asked, which is different
-    // from FALSE meaning somebody said no. Only the second is a declaration.
-    $fields['special_category'] = BaseFieldDefinition::create('boolean')
-      ->setRevisionable(TRUE)
-      ->setLabel(new TranslatableMarkup('Contains special-category data'))
-      ->setDescription(new TranslatableMarkup('What the person who gave us this document said about whether it contains special-category data.'))
-      ->setDisplayConfigurable('view', TRUE);
-
-    $fields['special_category_declared_at'] = BaseFieldDefinition::create('datetime')
-      ->setRevisionable(TRUE)
-      ->setSetting('datetime_type', DateTimeItem::DATETIME_TYPE_DATETIME)
-      ->setLabel(new TranslatableMarkup('Declared on'))
-      ->setDisplayConfigurable('view', TRUE);
-
-    // The wording, stored rather than referenced. A declaration means nothing
-    // without what was asked, and a pointer to wording held elsewhere is only
-    // as good as that elsewhere still existing and still saying the same thing.
-    $fields['special_category_question'] = BaseFieldDefinition::create('string_long')
-      ->setRevisionable(TRUE)
-      ->setLabel(new TranslatableMarkup('Question asked'))
-      ->setDescription(new TranslatableMarkup('The exact wording they were answering.'))
-      ->setDisplayConfigurable('view', TRUE);
-
     $fields['is_archived'] = BaseFieldDefinition::create('boolean')
       ->setLabel(new TranslatableMarkup('Archived?'))
       ->setRevisionable(TRUE)
@@ -258,22 +238,12 @@ class Document extends ContentEntityBase implements DocumentInterface {
   /**
    * {@inheritdoc}
    */
-  public function declaredSpecialCategory(): ?bool {
-    $value = $this->get('special_category')->value;
-    return $value === NULL ? NULL : (bool) $value;
-  }
-
-  /**
-   * {@inheritdoc}
-   */
-  public function declareSpecialCategory(bool $contains, string $question, ?string $when = NULL) {
-    $this->set('special_category', $contains);
-    $this->set('special_category_question', $question);
-    $this->set(
-      'special_category_declared_at',
-      $when ?? (new DrupalDateTime())->format(DateTimeItemInterface::DATETIME_STORAGE_FORMAT)
-    );
-    return $this;
+  public function subjectId(): ?int {
+    // Falls back to the owner, because most documents are about the person
+    // who gave them to us, and making every caller write that fallback is how
+    // half of them come to forget it.
+    $about = $this->get('about')->target_id;
+    return $about !== NULL ? (int) $about : ($this->getOwnerId() ?: NULL);
   }
 
   /**

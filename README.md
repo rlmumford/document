@@ -54,17 +54,22 @@ so next time the list is a choice rather than three files called `document.pdf`.
 Configure it with the document type new uploads become, and the extensions and
 size you will accept.
 
-## `special_category`
+## `owner` and `about`
 
-Whether a document contains Article 9 data — health, religious belief, and the
-rest of that list — as told to us by the person who gave it to us, with the
-exact question they answered and when.
+The owner is whoever provided the document and is answerable for it. `about` is
+whose life it describes. Usually the same person; occasionally the whole point —
+a case worker scanning a client's bank statement, a recruiter uploading somebody
+else's CV.
 
-It lives on the document rather than on any one use of it, because that is where
-it is true: the same CV sent to three employers contains what it contains.
-Asking per use means asking the same person about the same file repeatedly, with
-nothing noticing if the answers differ. Here, a second use can read the answer,
-and an inconsistent one is visible.
+`subjectId()` reads `about`, falling back to the owner where nobody said
+otherwise, and `document_selector` offers documents on the same basis. That
+fallback is why `about` is left empty rather than defaulted: "nobody said" has
+to stay distinguishable from "it is theirs", or the recruiter case silently
+becomes the recruiter's own document.
 
-`NULL` means nobody has been asked, which is not the same as `FALSE` meaning
-somebody said no. Only the second is a declaration.
+## What this module deliberately does not know
+
+Whether a document contains special-category data under Article 9. That question
+only means something alongside a consent model — what you are allowed to do
+having been told yes — and a module that stores files should not carry half of
+one. Add the field where the consent lives.
