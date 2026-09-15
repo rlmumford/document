@@ -1,0 +1,19 @@
+{
+    "name": "rlmumford/document",
+    "description": "A document: one file people treat as a unit, what it is, what state it is in, and what has been worked out about it.",
+    "type": "drupal-module",
+    "license": "GPL-2.0+",
+    "authors": [
+        {
+            "name": "rlmumford",
+            "email": "rlmumford@googlemail.com"
+        }
+    ],
+    "require": {
+        "drupal/entity": "^1.4"
+    },
+    "suggest": {
+        "drupal/pdf_tools": "Required by the document_generation submodule."
+    },
+    "minimum-stability": "dev"
+}
