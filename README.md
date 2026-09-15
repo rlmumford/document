@@ -83,3 +83,13 @@ Whether a document contains special-category data under Article 9. That question
 only means something alongside a consent model — what you are allowed to do
 having been told yes — and a module that stores files should not carry half of
 one. Add the field where the consent lives.
+
+## Revisions
+
+Replacing the file in a document creates a new revision rather than overwriting
+it, so anything that referenced the old one — an application that was already
+sent, say — still resolves to what it actually sent.
+
+Revisions carry a log: who made them, when, and why. Without that, "there are
+four versions of this" answers nothing, and the question asked of a document
+years later is always who changed it and what they were doing.

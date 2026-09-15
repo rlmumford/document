@@ -5,6 +5,7 @@ namespace Drupal\document\Entity;
 use Drupal\Core\Entity\ContentEntityBase;
 use Drupal\Core\Entity\EntityChangedTrait;
 use Drupal\Core\Entity\EntityTypeInterface;
+use Drupal\Core\Entity\RevisionLogEntityTrait;
 use Drupal\Core\Field\BaseFieldDefinition;
 use Drupal\Core\Field\FieldStorageDefinitionInterface;
 use Drupal\Core\StringTranslation\TranslatableMarkup;
@@ -57,6 +58,7 @@ use Drupal\user\EntityOwnerTrait;
  *   },
  *   base_table = "document",
  *   revision_table = "document_revision",
+ *   show_revision_ui = TRUE,
  *   admin_permission = "administer documents",
  *   entity_keys = {
  *     "id" = "id",
@@ -65,6 +67,11 @@ use Drupal\user\EntityOwnerTrait;
  *     "uuid" = "uuid",
  *     "label" = "label",
  *     "owner" = "owner",
+ *   },
+ *   revision_metadata_keys = {
+ *     "revision_user" = "revision_user",
+ *     "revision_created" = "revision_created",
+ *     "revision_log_message" = "revision_log",
  *   },
  *   bundle_entity_type = "document_type",
  *   field_ui_base_route = "entity.document_type.edit_form",
@@ -82,6 +89,12 @@ class Document extends ContentEntityBase implements DocumentInterface {
 
   use EntityChangedTrait;
   use EntityOwnerTrait;
+  // A document is revisionable so that replacing a file does not rewrite what
+  // was already sent somewhere. That only works if a revision can say who made
+  // it and why: "there are four versions of this" answers nothing on its own,
+  // and the question asked of a document years later is always who changed it,
+  // when, and what they were doing.
+  use RevisionLogEntityTrait;
 
   /**
    * {@inheritdoc}
@@ -89,6 +102,7 @@ class Document extends ContentEntityBase implements DocumentInterface {
   public static function baseFieldDefinitions(EntityTypeInterface $entity_type) {
     $fields = parent::baseFieldDefinitions($entity_type);
     $fields += static::ownerBaseFieldDefinitions($entity_type);
+    $fields += static::revisionLogBaseFieldDefinitions($entity_type);
 
     $fields['label'] = BaseFieldDefinition::create('string')
       ->setRevisionable(TRUE)

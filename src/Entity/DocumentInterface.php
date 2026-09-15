@@ -4,12 +4,13 @@ namespace Drupal\document\Entity;
 
 use Drupal\Core\Entity\ContentEntityInterface;
 use Drupal\Core\Entity\EntityChangedInterface;
+use Drupal\Core\Entity\RevisionLogInterface;
 use Drupal\user\EntityOwnerInterface;
 
 /**
  * A file people treat as one thing.
  */
-interface DocumentInterface extends ContentEntityInterface, EntityChangedInterface, EntityOwnerInterface {
+interface DocumentInterface extends ContentEntityInterface, EntityChangedInterface, EntityOwnerInterface, RevisionLogInterface {
 
   /**
    * Gets the status.
