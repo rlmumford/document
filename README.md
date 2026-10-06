@@ -205,3 +205,43 @@ Existing records remain untouched. Existing non-staff role strings need matching
 consumer-owned definitions before they can fulfil requirements.
 
 Enable `document_checklist` for the checklist forms, resources and operation.
+
+## Review completion and workflows
+
+`document.reviewer::summary($document)` exposes `status` (`pending`, `complete`,
+`not_required`), `met`, `total` and the per-requirement evidence. It evaluates the
+current document version and current type configuration. The **Required reviews**
+extra display component shows this summary in document views, including checklist
+resources; hide or reorder it through Manage display. It does not expose analysis,
+review reasons or reviewer identities. The summary is not render-cached because
+reviewer mappings may use global contexts or related entities.
+
+Recording a review through `document.reviewer::record()` emits
+`ReviewRequirementsCompleted` only when the required set changes from incomplete
+to fully approved. No required definitions means `not_required`, not completion.
+The event carries the reviewed document and matching requirement evidence. Review
+recording and event consumers run in the same transaction; an exception rolls back
+the review and database effects. Event subscribers must not perform irreversible
+external operations there: persist work to dispatch after commit instead.
+
+Approval followed by rejection and a later approval can produce a new completion.
+A new document revision requires fresh evidence. Editing type configuration or
+importing review entities directly does not manufacture historical completion
+occurrences. Integrations submitting decisions must use the review service.
+
+Enable **Document Task** (`document_task`) to expose
+`document.reviews_completed` in the existing dependency widget and Entity Template
+dependency component. Its required context is **Reviewed document**. With
+`task_dependency_job` enabled, the same event appears among job triggers as
+`dependency_event:document.reviews_completed`; its `document` context can populate
+the configured task template. Existing trigger actions and conditions still apply.
+
+Dependencies retain the established *remembered occurrence* semantics: register
+before completion to wait for that event. Registering after completion waits for
+a later event. Replacing a document or losing approval changes the live summary
+but does not erase an existing dependency receipt, reopen resolved work, or undo
+an action. This is not a continuous “document remains approved” gate. A consumer
+requiring that guarantee must check current requirements before acting.
+
+Neither the event nor the summary changes `document.status`. Partial/incomplete
+follow-up requests, status policy and AI execution remain separate integrations.

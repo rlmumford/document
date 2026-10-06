@@ -1,0 +1,54 @@
+<?php
+
+/**
+ * @file
+ * Document review summary display.
+ */
+
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\Core\Entity\EntityInterface;
+
+/**
+ * Implements hook_entity_extra_field_info().
+ */
+function document_entity_extra_field_info(): array {
+  $fields = [];
+  foreach (\Drupal::entityTypeManager()->getStorage('document_type')->loadMultiple() as $type) {
+    $fields['document'][$type->id()]['display']['review_requirements'] = [
+      'label' => t('Required reviews'),
+      'description' => t('Current-version review requirements and approval progress.'),
+      'weight' => 20,
+      'visible' => TRUE,
+    ];
+  }
+  return $fields;
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_view().
+ */
+function document_document_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode): void {
+  if (!$display->getComponent('review_requirements') || !$entity->access('view')) {
+    return;
+  }
+  $summary = \Drupal::service('document.reviewer')->summary($entity);
+  $rows = [];
+  foreach ($summary['requirements'] as $requirement) {
+    $rows[] = [
+      ['data' => ['#plain_text' => $requirement['label']]],
+      $requirement['met'] ? t('Approved') : t('Awaiting approval'),
+    ];
+  }
+  $build['review_requirements'] = [
+    '#type' => 'table',
+    '#caption' => t('Required reviews: @met of @total approved', [
+      '@met' => $summary['met'],
+      '@total' => $summary['total'],
+    ]),
+    '#header' => [t('Review'), t('Current version')],
+    '#rows' => $rows,
+    '#empty' => t('No reviews required.'),
+    // Reviewer selectors can depend on global contexts and related entities.
+    '#cache' => ['max-age' => 0],
+  ];
+}

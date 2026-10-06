@@ -1,0 +1,6 @@
+services:
+  document_task.reviews:
+    class: Drupal\document_task\EventSubscriber\ReviewsCompletedSubscriber
+    arguments: ['@task_dependency.manager', '@module_handler', '@?plugin.manager.task_job.trigger']
+    tags:
+      - { name: event_subscriber }

@@ -3,6 +3,9 @@
 namespace Drupal\document;
 
 use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Database\Connection;
+use Drupal\document\Event\ReviewRequirementsCompleted;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Drupal\Core\Plugin\Context\ContextHandlerInterface;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\document\Review\ReviewerContext;
@@ -22,7 +25,7 @@ use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
  */
 class DocumentReviewer {
 
-  public function __construct(protected EntityTypeManagerInterface $entityTypes, protected AccountProxyInterface $account, protected ContextHandlerInterface $contexts, protected PlaceholderResolver $placeholders) {}
+  public function __construct(protected EntityTypeManagerInterface $entityTypes, protected AccountProxyInterface $account, protected ContextHandlerInterface $contexts, protected PlaceholderResolver $placeholders, protected Connection $database, protected EventDispatcherInterface $events) {}
 
   /**
    * Reloads the current document and enforces review access.
@@ -136,6 +139,13 @@ class DocumentReviewer {
    * original full scope. A workflow must first narrow that scope explicitly.
    */
   public function requirements(DocumentInterface $document): array {
+    return $this->evaluateRequirements($document);
+  }
+
+  /**
+   * Evaluates evidence, optionally using current reads inside review recording.
+   */
+  protected function evaluateRequirements(DocumentInterface $document, bool $lock = FALSE): array {
     $document = $this->entityTypes->getStorage('document')->loadUnchanged($document->id());
     if (!$document || !$document->access('view', $this->account)) {
       throw new AccessDeniedHttpException('The document cannot be viewed.');
@@ -154,22 +164,27 @@ class DocumentReviewer {
       catch (ContextException | TypedDataException | \DomainException) {
         continue;
       }
-      $query = $storage->getQuery()->accessCheck(FALSE)
-        ->condition('document', $document->id())
-        ->condition('role', $name)
-        ->condition('fingerprint', $this->fingerprint($document))
-        ->sort('id', 'DESC')->range(0, 1);
-      if ($reviewer !== NULL) {
-        $query->condition('reviewer', $reviewer);
-      }
-      $ids = $query->execute();
-      if ($ids) {
-        $review = $storage->load(reset($ids));
-        $result[$name]['review'] = $review->uuid();
-        $result[$name]['met'] = isset($definition['options']['approved']) && $review->get('decision')->value === 'approved';
+      $review = $storage->latestEvidence((string) $document->id(), $this->fingerprint($document), $name, $reviewer, $lock);
+      if ($review) {
+        $result[$name]['review'] = $review['uuid'];
+        $result[$name]['met'] = isset($definition['options']['approved']) && $review['decision'] === 'approved';
       }
     }
     return $result;
+  }
+
+  /**
+   * Exposes current evidence without changing the document workflow status.
+   */
+  public function summary(DocumentInterface $document): array {
+    $requirements = $this->requirements($document);
+    $met = count(array_filter($requirements, static fn(array $requirement) => $requirement['met']));
+    return [
+      'status' => !$requirements ? 'not_required' : ($met === count($requirements) ? 'complete' : 'pending'),
+      'met' => $met,
+      'total' => count($requirements),
+      'requirements' => $requirements,
+    ];
   }
 
   /**
@@ -179,6 +194,23 @@ class DocumentReviewer {
    * Source and attempt are opaque IDs; document has no checklist dependency.
    */
   public function record(DocumentInterface $document, string $fingerprint, string $decision, string $role, string $reason = '', string $source = '', string $attempt = '', array|\stdClass|null $analysis = NULL): DocumentReview {
+    $transaction = $this->database->startTransaction();
+    try {
+      // Serialize reviewers of the same document before reading their evidence.
+      $this->database->select('document', 'd')->fields('d', ['id'])
+        ->condition('id', $document->id())->forUpdate()->execute()->fetchField();
+      return $this->recordReview($document, $fingerprint, $decision, $role, $reason, $source, $attempt, $analysis);
+    }
+    catch (\Throwable $exception) {
+      $transaction->rollBack();
+      throw $exception;
+    }
+  }
+
+  /**
+   * Writes evidence and notifies consumers in the same database transaction.
+   */
+  protected function recordReview(DocumentInterface $document, string $fingerprint, string $decision, string $role, string $reason, string $source, string $attempt, array|\stdClass|null $analysis): DocumentReview {
     $document = $this->load($document);
     if (!hash_equals($this->fingerprint($document), $fingerprint)) {
       throw new \DomainException('The document changed. Reload it before reviewing.');
@@ -187,6 +219,7 @@ class DocumentReviewer {
     if (!isset($policy['options'][$decision]) || trim($role) === '' || mb_strlen($role) > 255 || mb_strlen($decision) > 128 || mb_strlen($policy['options'][$decision]) > 255) {
       throw new \InvalidArgumentException('Choose an available decision and provide a review role.');
     }
+    $before = $this->evaluateRequirements($document, TRUE);
     $review = $this->entityTypes->getStorage('document_review')->create([
       'document' => $document->id(),
       'revision' => (string) $document->getRevisionId(),
@@ -204,6 +237,11 @@ class DocumentReviewer {
       'receipt' => $source !== '' ? hash('sha256', serialize([$source, $attempt])) : NULL,
     ]);
     $review->save();
+    $after = $this->evaluateRequirements($document, TRUE);
+    $complete = static fn(array $requirements): bool => $requirements && !in_array(FALSE, array_column($requirements, 'met'), TRUE);
+    if (!$complete($before) && $complete($after)) {
+      $this->events->dispatch(new ReviewRequirementsCompleted($document, $after));
+    }
     return $review;
   }
 

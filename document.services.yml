@@ -1,4 +1,4 @@
 services:
   document.reviewer:
     class: Drupal\document\DocumentReviewer
-    arguments: ['@entity_type.manager', '@current_user', '@context.handler', '@typed_data_plus.placeholder_resolver']
+    arguments: ['@entity_type.manager', '@current_user', '@context.handler', '@typed_data_plus.placeholder_resolver', '@database', '@event_dispatcher']

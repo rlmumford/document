@@ -2,6 +2,7 @@
 
 namespace Drupal\Tests\document_checklist\Kernel;
 
+use Drupal\document\Event\ReviewRequirementsCompleted;
 use Drupal\Core\Form\FormState;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\document\Entity\Document;
@@ -105,6 +106,38 @@ class DocumentReviewTest extends KernelTestBase {
     $handler = $user->work->checklist->getItem('review')->getHandler();
     $handler->setContextValue('document', $this->document);
     return $handler;
+  }
+
+  /**
+   * Completion is an edge; partial, empty, and stale evidence do not qualify.
+   */
+  public function testCompletionEvent(): void {
+    $this->handler();
+    $reviewer = $this->container->get('document.reviewer');
+    $events = [];
+    $this->container->get('event_dispatcher')->addListener(ReviewRequirementsCompleted::class, static function ($event) use (&$events) {
+      $events[] = $event;
+    });
+    $fingerprint = $reviewer->fingerprint($this->document);
+    $reviewer->record($this->document, $fingerprint, 'approved', 'client');
+    $this->assertSame('pending', $reviewer->summary($this->document)['status']);
+    $this->assertCount(0, $events);
+    $reviewer->record($this->document, $fingerprint, 'approved', 'staff');
+    $this->assertSame('complete', $reviewer->summary($this->document)['status']);
+    $this->assertCount(1, $events);
+    $reviewer->record($this->document, $fingerprint, 'approved', 'staff');
+    $this->assertCount(1, $events);
+    $this->document->setNewRevision(TRUE);
+    $this->document->save();
+    $this->assertSame('pending', $reviewer->summary($this->document)['status']);
+    $fingerprint = $reviewer->fingerprint($this->document);
+    $reviewer->record($this->document, $fingerprint, 'approved', 'client');
+    $reviewer->record($this->document, $fingerprint, 'approved', 'staff');
+    $this->assertCount(2, $events);
+    $this->assertSame('received', $this->document->getStatus());
+    $type = DocumentType::load('agreement');
+    $type->set('reviews', [])->save();
+    $this->assertSame('not_required', $reviewer->summary($this->document)['status']);
   }
 
   /**

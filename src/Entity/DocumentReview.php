@@ -15,6 +15,7 @@ use Drupal\Core\StringTranslation\TranslatableMarkup;
  *   id = "document_review",
  *   label = @Translation("Document review"),
  *   handlers = {
+ *     "storage" = "Drupal\document\DocumentReviewStorage",
  *     "storage_schema" = "Drupal\document\DocumentReviewStorageSchema",
  *     "access" = "Drupal\document\Entity\DocumentReviewAccessControlHandler",
  *     "views_data" = "Drupal\views\EntityViewsData"
