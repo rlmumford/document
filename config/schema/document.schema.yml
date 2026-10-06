@@ -11,16 +11,46 @@ document.type.*:
     description:
       type: text
       label: 'Description'
-    review:
-      type: mapping
-      label: 'Review policy'
-      mapping:
-        instructions:
-          type: text
-          label: 'Review instructions'
-        options:
-          type: sequence
-          label: 'Decisions'
-          sequence:
-            type: label
-            label: 'Decision label'
+    reviews:
+      type: sequence
+      label: 'Named reviews'
+      sequence:
+        type: document.review_definition
+
+document.review_definition:
+  type: mapping
+  label: 'Review definition'
+  mapping:
+    label:
+      type: label
+      label: 'Review name'
+    instructions:
+      type: text
+      label: 'Human instructions'
+    options:
+      type: sequence
+      label: 'Decisions'
+      sequence:
+        type: label
+        label: 'Decision label'
+    required:
+      type: boolean
+      label: 'Required for approval'
+    eligibility:
+      type: string
+      label: 'Reviewer eligibility mode'
+    permission:
+      type: string
+      label: 'Required permission'
+    context_mapping:
+      type: sequence
+      label: 'Reviewer context mapping'
+      sequence:
+        type: string
+        label: 'Context selector'
+    prompt:
+      type: text
+      label: 'AI analysis prompt'
+    analysis_schema:
+      type: string
+      label: 'Analysis JSON schema'

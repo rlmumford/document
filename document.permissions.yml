@@ -19,3 +19,5 @@ delete own document:
   title: 'Delete own documents'
 review documents:
   title: 'Record document reviews'
+review documents as staff:
+  title: 'Perform staff document reviews'

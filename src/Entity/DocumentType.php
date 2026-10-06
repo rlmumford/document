@@ -41,7 +41,7 @@ use Drupal\Core\Config\Entity\ConfigEntityBundleBase;
  *     "id",
  *     "label",
  *     "description",
- *     "review",
+ *     "reviews",
  *   },
  *   links = {
  *     "add-form" = "/admin/structure/document-types/add",
@@ -75,20 +75,39 @@ class DocumentType extends ConfigEntityBundleBase {
   protected $description;
 
   /**
-   * Human review policy shared by every document of this type.
+   * Named review requirements for this document type.
    *
    * @var array
    */
-  protected $review = [
-    'instructions' => 'Review the document and record your decision.',
-    'options' => ['approved' => 'Approve', 'rejected' => 'Reject'],
+  protected $reviews = [
+    'staff' => [
+      'label' => 'Staff review',
+      'instructions' => 'Review the document and record your decision.',
+      'options' => ['approved' => 'Approve', 'rejected' => 'Reject'],
+      'required' => TRUE,
+      'eligibility' => 'permission',
+      'permission' => 'review documents as staff',
+      'context_mapping' => [],
+      'prompt' => '',
+      'analysis_schema' => '',
+    ],
   ];
 
   /**
-   * Gets the review instructions and machine-named choices.
+   * Gets all named review requirements.
    */
-  public function getReview(): array {
-    return $this->review;
+  public function getReviews(): array {
+    return $this->reviews;
+  }
+
+  /**
+   * Gets a named definition, rejecting unknown review capacities.
+   */
+  public function getReview(string $name): array {
+    if (!isset($this->reviews[$name])) {
+      throw new \InvalidArgumentException('This document type does not define the requested review.');
+    }
+    return $this->reviews[$name];
   }
 
   /**

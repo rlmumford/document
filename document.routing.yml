@@ -1,0 +1,24 @@
+document.review_definition.add:
+  path: '/admin/structure/document-types/{document_type}/reviews/add'
+  defaults:
+    _form: '\Drupal\document\Form\ReviewDefinitionForm'
+    _title: 'Add review requirement'
+    review_name: ''
+  requirements:
+    _permission: 'administer documents'
+  options:
+    parameters:
+      document_type:
+        type: entity:document_type
+
+document.review_definition.edit:
+  path: '/admin/structure/document-types/{document_type}/reviews/{review_name}'
+  defaults:
+    _form: '\Drupal\document\Form\ReviewDefinitionForm'
+    _title: 'Edit review requirement'
+  requirements:
+    _permission: 'administer documents'
+  options:
+    parameters:
+      document_type:
+        type: entity:document_type

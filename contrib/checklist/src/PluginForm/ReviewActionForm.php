@@ -18,6 +18,11 @@ class ReviewActionForm extends PluginFormBase {
    */
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $input = $this->plugin->reviewInput();
+    $form['review_name'] = [
+      '#type' => 'item',
+      '#title' => $this->t('Review requirement'),
+      '#plain_text' => $input['label'],
+    ];
     $form['instructions'] = ['#plain_text' => $input['instructions']];
     // Retain the version shown at build time through validation and submit.
     $form['fingerprint'] = ['#type' => 'hidden', '#default_value' => $input['fingerprint']];

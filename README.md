@@ -112,38 +112,96 @@ Who and when are stamped on every new revision, not only the ones made through
 a form - otherwise a revision created by an update hook or a migration has no
 author and no date.
 
-## Individual reviews
+## Named review requirements
 
-`document_review` records one person's review, not an aggregate document status.
-It stores the document and reviewed revision, the executing user, their reviewing
-role (a workflow capacity such as `staff` or `client`, not a Drupal role), the
-machine decision and its label at that time, reason, timestamp and a fingerprint
-of the revision and file references. It also accepts opaque source/attempt IDs.
-Records cannot be updated through entity storage. Separate people, roles and
-attempts create separate evidence; old decisions are not overwritten.
+Document types own a `reviews` map keyed by requirement name, such as `staff`,
+`debtor` and `creditor`. Each definition contains its label, human instructions,
+allowed machine decisions, whether it is required, reviewer eligibility, an
+optional AI analysis prompt and a JSON Schema Draft 7 analysis contract.
 
-The `document.reviewer` service is the write boundary. It reloads the document,
-requires an authenticated user with `review documents` and document view access,
-checks the submitted fingerprint and validates the decision against the document
-type's current review options. The user is taken from the executing account,
-never from submitted parameters. Trusted callers supply and authorize the role.
-A unique receipt prevents a source/attempt from recording duplicate evidence.
-Calls without a source can independently record multiple reviews.
+The document-type form lists these definitions in a table. Each has its own edit
+route; Add review requirement creates another. Editing a job's review item only
+selects the named requirement and maps its document context. The job does not
+copy or override the type's policy.
 
-Document types own human review instructions and `machine_name|Label` choices.
-These are edited on the document type form and exported with its configuration.
-Historical review labels survive later changes to those choices.
+Eligibility has two modes, both in addition to `review documents` permission and
+document view access:
 
-Reviewing does **not** update `document.status`. A later approval policy can
-require, for example, two distinct clients' approvals on the same document
-version. Counting the latest decision alone would be incorrect. Approval
-aggregation, replacement requests, AI prompts and automated review are outside
-this first slice.
+- `permission`: require a specific permission. The default staff review requires
+  `review documents as staff` (grant this to the appropriate staff roles).
+- `context`: use the standard Typed Data Plus context mapping widget and handler
+  to resolve one required `entity:user` from the document or an available global
+  context. For example, `document.person.entity`, or a path through a consumer's
+  case reference to its debtor. Missing relationships fail closed. The current
+  actor must match the resolved user, even if that actor has administrative
+  permissions. This neither logs in as that person nor grants them access.
 
-The fingerprint identifies the revision and ordered `file`/`files` field values;
-it is not a hash of file bytes. Files should be replaced with new managed-file
-identities rather than modified in place. The review is evidence of the version
-seen, not a substitute for preserving document revisions and managed files.
+These are workflow capacities, not Drupal role assignments. Consumers provide
+case/debtor/creditor fields; the reusable document module defines none of them.
+This slice maps one person per named requirement. Distinct people whose approvals
+are all required should have distinct named requirements.
 
-`document_update_10001()` installs the review entity for existing installations.
-Enable the optional `document_checklist` submodule for checklist integration.
+## Individual evidence and requirement status
+
+`document_review` records one person's review. It stores the named requirement
+in `role`, its historical label in `role_label`, the document and reviewed
+revision, executing user, machine decision and historical decision label, reason,
+time and revision/file-reference fingerprint. It accepts opaque source/attempt
+IDs. Storage rejects updates; a new attempt creates new evidence rather than
+rewriting old evidence. A unique receipt prevents source/attempt replay.
+
+`document.reviewer::record()` reloads the document, checks access and eligibility,
+verifies the fingerprint and validates the decision. Reviewer identity always
+comes from the executing account. Supplying optional structured analysis validates
+it against this named definition's schema and preserves both JSON data and that
+schema with the evidence. This keeps old analysis interpretable if the type's
+schema changes later. Human review may omit analysis; no model run is implied by
+this human submission API.
+
+`requirements($document)` returns each required definition's label, `met` flag
+and the matching review UUID, if any. It uses the latest evidence for that
+requirement and current document fingerprint, restricted to the current mapped
+person where applicable. Only `approved` satisfies full-scope approval. It does
+not mutate `document.status`, create tasks or authorize viewing other documents.
+
+`partial` accepts a narrower scope, which a subsequent workflow must describe and
+request the remainder of. `incomplete` rejects an insufficient submission while
+allowing a continuation to retain uploaded material. Neither approves the
+original full scope. This slice records the distinction; it does not choose
+between new revisions and replacement requests or perform those follow-up effects.
+
+The fingerprint identifies the revision and ordered file field values, ignoring
+empty field items; it is not a file-byte hash. Replace managed files rather than
+changing bytes in place, and retain document revisions for historical evidence.
+Empty-file fingerprints are now normalized, so old empty-file approvals may need
+reviewing again; evidence is never silently retargeted to a different version.
+
+## AI preparation boundary
+
+`prepareAnalysis($document, $name)` authorizes the named review and returns:
+
+- A prompt resolved with the shared Typed Data Plus placeholder resolver, using
+  the current document typed data (for example `{{document.label.value}}`).
+- The analysis schema, allowed decisions, review name and document fingerprint.
+
+Unresolved placeholders fail rather than silently removing review checks. Schemas
+must be inline Draft 7 objects; references and base URIs are rejected. This keeps
+the schema valid both alone and nested inside checklist operation parameters.
+The complete schema is validated against the JSON-schema library's bundled
+meta-schema. Required properties and enums are enforced when analysis is supplied.
+
+There is **no AI runner or model invocation in this slice**. A later adapter must
+record its run, model and execution authorization explicitly; it must not use the
+human-record API to pretend a staff member reviewed something they did not. Human
+confirmation of AI recommendations should link to that analysis/run. Prompt
+configuration alone never grants authority to approve a debtor's document.
+
+## Updates and integration
+
+`document_update_10001()` installs review storage. `document_update_10002()` adds
+analysis and historical role-label fields and converts the original single review
+policy into a named staff definition, preserving instructions and decisions.
+Existing records remain untouched. Existing non-staff role strings need matching
+consumer-owned definitions before they can fulfil requirements.
+
+Enable `document_checklist` for the checklist forms, resources and operation.

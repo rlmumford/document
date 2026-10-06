@@ -17,6 +17,7 @@ use Drupal\Core\Entity\TypedData\EntityDataDefinition;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\TypedData\DataDefinition;
 use Drupal\document\DocumentReviewer;
+use Drupal\document\Review\AnalysisSchema;
 use Drupal\checklist\Attempt\ChecklistAttemptJournal;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
@@ -104,6 +105,22 @@ class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements Int
   }
 
   /**
+   * {@inheritdoc}
+   */
+  public function isActionable(): bool {
+    if (!parent::isActionable()) {
+      return FALSE;
+    }
+    try {
+      $this->reviewer->authorize($this->getContextValue('document'), $this->getConfiguration()['role']);
+      return TRUE;
+    }
+    catch (AccessDeniedHttpException | \DomainException | \InvalidArgumentException) {
+      return FALSE;
+    }
+  }
+
+  /**
    * Gets current policy and a token identifying the document shown to the user.
    */
   public function reviewInput(): array {
@@ -111,11 +128,12 @@ class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements Int
     if (!$item->get('checklist')->checklist->getEntity()->access('update')) {
       throw new AccessDeniedHttpException('The checklist cannot be updated.');
     }
+    $document = $this->reviewer->load($this->getContextValue('document'));
+    $definition = $this->reviewer->authorize($document, $this->getConfiguration()['role']);
     if (!$item->isIncomplete() || $item->isApplicable() !== TRUE || !$item->isActionable()) {
       throw new \DomainException('The document review is not actionable.');
     }
-    $document = $this->reviewer->load($this->getContextValue('document'));
-    return $this->reviewer->policy($document) + [
+    return $definition + [
       'fingerprint' => $this->reviewer->fingerprint($document),
     ];
   }
@@ -144,6 +162,7 @@ class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements Int
             ],
             'fingerprint' => ['type' => 'string', 'const' => $input['fingerprint']],
             'reason' => ['type' => 'string'],
+            'analysis' => json_decode(json_encode(AnalysisSchema::parse($input['analysis_schema'])), TRUE),
           ],
           'required' => ['decision', 'fingerprint'],
           'additionalProperties' => FALSE,
@@ -162,15 +181,18 @@ class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements Int
    * {@inheritdoc}
    */
   public function executeActionOperation(string $operation, array $parameters): array {
-    if ($operation !== 'review' || array_diff(array_keys($parameters), ['decision', 'fingerprint', 'reason']) || !is_string($parameters['decision'] ?? NULL) || !is_string($parameters['fingerprint'] ?? NULL) || !is_string($parameters['reason'] ?? '')) {
+    if ($operation !== 'review' || array_diff(array_keys($parameters), ['decision', 'fingerprint', 'reason', 'analysis']) || !is_string($parameters['decision'] ?? NULL) || !is_string($parameters['fingerprint'] ?? NULL) || !is_string($parameters['reason'] ?? '')) {
       throw new \InvalidArgumentException('Provide a decision, document fingerprint and optional reason.');
+    }
+    if (isset($parameters['analysis']) && !is_array($parameters['analysis']) && !$parameters['analysis'] instanceof \stdClass) {
+      throw new \InvalidArgumentException('Analysis must be an object.');
     }
     $this->reviewInput();
     $transaction = $this->database->startTransaction();
     try {
       $item = $this->getItem();
       $document = $this->getContextValue('document');
-      $review = $this->reviewer->record($document, $parameters['fingerprint'], $parameters['decision'], $this->getConfiguration()['role'], $parameters['reason'] ?? '', $item->uuid(), $this->journal->latest($item)?->id ?? '');
+      $review = $this->reviewer->record($document, $parameters['fingerprint'], $parameters['decision'], $this->getConfiguration()['role'], $parameters['reason'] ?? '', $item->uuid(), $this->journal->latest($item)?->id ?? '', $parameters['analysis'] ?? NULL);
       $item->setOutcome('review', $review);
       $item->setOutcome('document', $document);
       $item->setOutcome('decision', $parameters['decision']);
@@ -200,7 +222,7 @@ class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements Int
       message: (string) $this->t('@decision — @reviewer (@role)', [
         '@decision' => $review->get('decision_label')->value,
         '@reviewer' => $reviewer ? $reviewer->label() : $this->t('Deleted account'),
-        '@role' => $review->get('role')->value,
+        '@role' => $review->get('role_label')->value ?: $review->get('role')->value,
       ]),
       updatedAt: (int) $review->get('created')->value,
     );

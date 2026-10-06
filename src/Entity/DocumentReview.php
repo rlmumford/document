@@ -38,7 +38,8 @@ class DocumentReview extends ContentEntityBase {
     }
     $fields['revision'] = BaseFieldDefinition::create('integer')->setLabel(new TranslatableMarkup('Reviewed revision'))->setRequired(TRUE);
     foreach ([
-      'role' => new TranslatableMarkup('Reviewing role'),
+      'role' => new TranslatableMarkup('Named review'),
+      'role_label' => new TranslatableMarkup('Review label'),
       'decision' => new TranslatableMarkup('Decision'),
       'decision_label' => new TranslatableMarkup('Decision label'),
       'fingerprint' => new TranslatableMarkup('Document fingerprint'),
@@ -48,6 +49,8 @@ class DocumentReview extends ContentEntityBase {
     ] as $name => $label) {
       $fields[$name] = BaseFieldDefinition::create('string')->setLabel($label);
     }
+    $fields['analysis'] = BaseFieldDefinition::create('string_long')->setLabel(new TranslatableMarkup('Analysis JSON'));
+    $fields['analysis_schema'] = BaseFieldDefinition::create('string_long')->setLabel(new TranslatableMarkup('Analysis schema at review time'));
     $fields['reason'] = BaseFieldDefinition::create('string_long')->setLabel(new TranslatableMarkup('Reason'));
     $fields['created'] = BaseFieldDefinition::create('created')->setLabel(new TranslatableMarkup('Reviewed at'));
     return $fields;

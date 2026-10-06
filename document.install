@@ -14,3 +14,24 @@ function document_update_10001() {
     $manager->installEntityType(\Drupal::entityTypeManager()->getDefinition('document_review'));
   }
 }
+
+/**
+ * Introduces named review definitions and optional analysis evidence.
+ */
+function document_update_10002() {
+  $updater = \Drupal::entityDefinitionUpdateManager();
+  $fields = \Drupal::service('entity_field.manager')->getFieldStorageDefinitions('document_review');
+  foreach (['role_label', 'analysis', 'analysis_schema'] as $name) {
+    if (!$updater->getFieldStorageDefinition($name, 'document_review')) {
+      $updater->installFieldStorageDefinition($name, 'document_review', 'document', $fields[$name]);
+    }
+  }
+  $defaults = \Drupal::entityTypeManager()->getStorage('document_type')->create([])->getReview('staff');
+  foreach (\Drupal::configFactory()->listAll('document.type.') as $name) {
+    $config = \Drupal::configFactory()->getEditable($name);
+    if (!$config->get('reviews')) {
+      $config->set('reviews', ['staff' => ($config->get('review') ?? []) + $defaults]);
+    }
+    $config->clear('review')->save(TRUE);
+  }
+}

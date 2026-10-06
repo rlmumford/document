@@ -7,3 +7,4 @@ dependencies:
   - drupal:text
   - drupal:options
   - entity:entity
+  - typed_data_plus:typed_data_context_assignment

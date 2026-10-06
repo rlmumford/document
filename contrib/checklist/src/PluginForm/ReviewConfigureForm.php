@@ -2,6 +2,7 @@
 
 namespace Drupal\document_checklist\PluginForm;
 
+use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\DependencyInjection\ContainerInjectionInterface;
 use Drupal\Core\Plugin\Context\ContextHandlerInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
@@ -16,13 +17,13 @@ class ReviewConfigureForm extends PluginFormBase implements ContainerInjectionIn
 
   use StringTranslationTrait;
 
-  public function __construct(protected ContextHandlerInterface $contexts) {}
+  public function __construct(protected ContextHandlerInterface $contexts, protected EntityTypeManagerInterface $entityTypes) {}
 
   /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
-    return new static($container->get('context.handler'));
+    return new static($container->get('context.handler'), $container->get('entity_type.manager'));
   }
 
   /**
@@ -31,13 +32,19 @@ class ReviewConfigureForm extends PluginFormBase implements ContainerInjectionIn
   public function buildConfigurationForm(array $form, FormStateInterface $form_state) {
     $form['#tree'] = TRUE;
     $form['context_mapping'] = $this->contexts->getContextAssignmentElement($this->plugin, $form_state->getTemporaryValue('gathered_contexts') ?? []);
+    $options = [];
+    foreach ($this->entityTypes->getStorage('document_type')->loadMultiple() as $type) {
+      foreach ($type->getReviews() as $name => $definition) {
+        $options[$name] = $definition['label'] . ' (' . $name . ')';
+      }
+    }
     $form['role'] = [
-      '#type' => 'textfield',
-      '#title' => $this->t('Reviewing role'),
-      '#description' => $this->t('The capacity in which the person reviews, such as staff or client. This does not grant a Drupal role.'),
+      '#type' => 'select',
+      '#title' => $this->t('Review requirement'),
+      '#description' => $this->t('The mapped document type must define this named review. It owns the decisions and reviewer eligibility.'),
       '#default_value' => $this->plugin->getConfiguration()['role'],
       '#required' => TRUE,
-      '#maxlength' => 255,
+      '#options' => $options,
     ];
     return $form;
   }

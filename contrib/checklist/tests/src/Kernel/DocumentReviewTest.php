@@ -6,6 +6,7 @@ use Drupal\Core\Form\FormState;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\document\Entity\Document;
 use Drupal\document\Entity\DocumentType;
+use Drupal\document\Review\AnalysisSchema;
 use Drupal\field\Entity\FieldConfig;
 use Drupal\field\Entity\FieldStorageConfig;
 use Drupal\KernelTests\KernelTestBase;
@@ -54,13 +55,21 @@ class DocumentReviewTest extends KernelTestBase {
     Role::create(['id' => 'reviewer', 'label' => 'Reviewer', 'permissions' => ['review documents', 'view any document']])->save();
     // Keep the tested reviewers out of the superuser special case.
     User::create(['name' => 'root'])->save();
+    $definition = [
+      'label' => 'Client review',
+      'instructions' => 'Check the names and terms before approving.',
+      'options' => ['approved' => 'I approve', 'rejected' => 'Changes needed'],
+      'required' => TRUE,
+      'eligibility' => 'permission',
+      'permission' => 'review documents',
+      'context_mapping' => [],
+      'prompt' => '',
+      'analysis_schema' => '',
+    ];
     DocumentType::create([
       'id' => 'agreement',
       'label' => 'Agreement',
-      'review' => [
-        'instructions' => 'Check the names and terms before approving.',
-        'options' => ['approved' => 'I approve', 'rejected' => 'Changes needed'],
-      ],
+      'reviews' => ['client' => $definition, 'staff' => ['label' => 'Staff review'] + $definition],
     ])->save();
     $this->document = Document::create(['type' => 'agreement', 'label' => 'Agreement', 'status' => 'received']);
     $this->document->save();
@@ -119,7 +128,7 @@ class DocumentReviewTest extends KernelTestBase {
     $this->assertFalse($state->hasAnyErrors());
     $form_plugin->submitConfigurationForm($form, $state);
     $this->assertTrue($first->getItem()->isComplete());
-    $this->assertStringContainsString('(client)', $first->getActionState()->message);
+    $this->assertStringContainsString('(Client review)', $first->getActionState()->message);
     $review1 = $first->getItem()->get('outcomes')->get('review')->getValue();
     $this->assertTrue($first->getItem()->get('checklist')->checklist->process());
     $this->assertSame([['approved', NULL]], $this->container->get('state')->get('checklist_context_test.runs'));
@@ -236,6 +245,191 @@ class DocumentReviewTest extends KernelTestBase {
       'decision' => 'approved',
       'fingerprint' => $input['fingerprint'],
     ]);
+  }
+
+  /**
+   * Requirement names, relationship identities and document versions agree.
+   */
+  public function testRelationshipRequirements(): void {
+    $type = DocumentType::load('agreement');
+    $base = $type->getReview('client');
+    $type->set('reviews', [
+      'debtor' => [
+        'label' => 'Debtor review',
+        'eligibility' => 'context',
+        'context_mapping' => ['reviewer' => 'document.person.entity'],
+      ] + $base,
+      'creditor' => [
+        'label' => 'Creditor review',
+        'eligibility' => 'context',
+        'context_mapping' => ['reviewer' => 'document.owner.entity'],
+        'options' => ['approved' => 'Approve', 'partial' => 'Partially approve', 'incomplete' => 'Incomplete'],
+      ] + $base,
+    ])->save();
+    $debtor = $this->handler('debtor');
+    $debtor_user = $this->container->get('current_user')->getAccount();
+    $creditor = $this->handler('creditor');
+    $creditor_user = $this->container->get('current_user')->getAccount();
+    $this->document->set('person', $debtor_user)->set('owner', $creditor_user)->save();
+    $service = $this->container->get('document.reviewer');
+    $this->assertSame([], $debtor->actionOperations());
+    try {
+      $service->record($this->document, $service->fingerprint($this->document), 'approved', 'debtor');
+      $this->fail('The creditor cannot perform the debtor review.');
+    }
+    catch (AccessDeniedHttpException) {
+      $this->assertFalse($service->requirements($this->document)['debtor']['met']);
+    }
+    $this->container->get('current_user')->setAccount($debtor_user);
+    $debtor->executeActionOperation('review', [
+      'decision' => 'approved',
+      'fingerprint' => $debtor->reviewInput()['fingerprint'],
+    ]);
+    $status = $service->requirements($this->document);
+    $this->assertTrue($status['debtor']['met']);
+    $this->assertFalse($status['creditor']['met']);
+    $this->container->get('current_user')->setAccount($creditor_user);
+    $creditor->executeActionOperation('review', [
+      'decision' => 'partial',
+      'fingerprint' => $creditor->reviewInput()['fingerprint'],
+    ]);
+    $this->assertFalse($service->requirements($this->document)['creditor']['met']);
+    $service->record($this->document, $service->fingerprint($this->document), 'incomplete', 'creditor');
+    $this->assertFalse($service->requirements($this->document)['creditor']['met']);
+    $service->record($this->document, $service->fingerprint($this->document), 'approved', 'creditor');
+    $this->assertTrue($service->requirements($this->document)['creditor']['met']);
+    $this->document->setNewRevision(TRUE);
+    $this->document->save();
+    $status = $service->requirements($this->document);
+    $this->assertFalse($status['debtor']['met']);
+    $this->assertFalse($status['creditor']['met']);
+    $this->assertSame('received', $this->document->getStatus());
+  }
+
+  /**
+   * Analysis uses the named prompt and schema, without masquerading as AI.
+   */
+  public function testAnalysisContract(): void {
+    $type = DocumentType::load('agreement');
+    $reviews = $type->getReviews();
+    $reviews['client']['prompt'] = 'Check {{document.label.value}}.';
+    $reviews['client']['analysis_schema'] = '{"type":"object","properties":{"name_matches":{"type":"boolean"},"quality":{"type":"string","enum":["clear","unreadable"]}},"required":["name_matches","quality"],"additionalProperties":false}';
+    $type->set('reviews', $reviews)->save();
+    $handler = $this->handler();
+    $service = $this->container->get('document.reviewer');
+    $prepared = $service->prepareAnalysis($this->document, 'client');
+    $this->assertSame('Check Agreement.', $prepared['prompt']);
+    $this->assertSame(['clear', 'unreadable'], $prepared['analysis_schema']->properties->quality->enum);
+    try {
+      $handler->executeActionOperation('review', [
+        'decision' => 'approved',
+        'fingerprint' => $prepared['fingerprint'],
+        'analysis' => ['name_matches' => TRUE, 'quality' => 'invented'],
+      ]);
+      $this->fail('Invalid analysis accepted.');
+    }
+    catch (\InvalidArgumentException) {
+      $this->assertFalse($handler->getItem()->isComplete());
+    }
+    $handler->executeActionOperation('review', [
+      'decision' => 'approved',
+      'fingerprint' => $prepared['fingerprint'],
+      'analysis' => ['name_matches' => TRUE, 'quality' => 'clear'],
+    ]);
+    $review = $handler->getItem()->get('outcomes')->get('review')->getValue();
+    $this->assertSame('Client review', $review->get('role_label')->value);
+    $this->assertSame(['name_matches' => TRUE, 'quality' => 'clear'], json_decode($review->get('analysis')->value, TRUE));
+    $this->assertSame($reviews['client']['analysis_schema'], $review->get('analysis_schema')->value);
+    $this->assertSame((string) $this->container->get('current_user')->id(), $review->get('reviewer')->target_id);
+  }
+
+  /**
+   * An empty relationship mapping never falls back to an arbitrary reviewer.
+   */
+  public function testMissingRelationship(): void {
+    $type = DocumentType::load('agreement');
+    $reviews = $type->getReviews();
+    $reviews['client']['eligibility'] = 'context';
+    $reviews['client']['context_mapping'] = ['reviewer' => 'document.person.entity'];
+    $type->set('reviews', $reviews)->save();
+    $handler = $this->handler();
+    $this->assertSame([], $handler->actionOperations());
+    $this->expectException(AccessDeniedHttpException::class);
+    $handler->reviewInput();
+  }
+
+  /**
+   * A base review permission does not grant the staff-review permission.
+   */
+  public function testStaffPermission(): void {
+    $type = DocumentType::load('agreement');
+    $reviews = $type->getReviews();
+    $reviews['staff']['permission'] = 'review documents as staff';
+    $type->set('reviews', $reviews)->save();
+    $handler = $this->handler('staff');
+    $this->assertSame([], $handler->actionOperations());
+    $this->expectException(AccessDeniedHttpException::class);
+    $handler->reviewInput();
+  }
+
+  /**
+   * Invalid or external analysis contracts are rejected before execution.
+   *
+   * @dataProvider invalidSchemas
+   */
+  public function testInvalidAnalysisSchema(string $schema): void {
+    $this->expectException(\InvalidArgumentException::class);
+    AnalysisSchema::parse($schema);
+  }
+
+  /**
+   * Invalid analysis schemas, including references that must never be fetched.
+   */
+  public static function invalidSchemas(): array {
+    return [
+      ['not json'],
+      ['{"type":"array"}'],
+      ['{"type":"object","properties":{"x":{"type":"not_a_type"}}}'],
+      ['{"type":"object","properties":{"x":{"$ref":"file:///etc/passwd"}}}'],
+      ['{"type":"object","definitions":{"value":{"type":"string"}},"properties":{"x":{"$ref":"#/definitions/value"}}}'],
+      ['{"type":"object","$id":"https://example.com/schema"}'],
+    ];
+  }
+
+  /**
+   * A prompt with an unresolved field cannot silently omit review checks.
+   */
+  public function testUnresolvedPrompt(): void {
+    $type = DocumentType::load('agreement');
+    $reviews = $type->getReviews();
+    $reviews['client']['prompt'] = 'Check {{document.nonexistent}}.';
+    $type->set('reviews', $reviews)->save();
+    $this->handler();
+    $this->expectException(\DomainException::class);
+    $this->container->get('document.reviewer')->prepareAnalysis($this->document, 'client');
+  }
+
+  /**
+   * Existing single-policy configuration becomes a named staff review.
+   */
+  public function testLegacyPolicyUpdate(): void {
+    $storage = $this->container->get('config.storage');
+    $data = $storage->read('document.type.agreement');
+    unset($data['reviews']);
+    $data['review'] = [
+      'instructions' => 'Existing instructions',
+      'options' => ['approved' => 'Approved', 'incomplete' => 'Incomplete'],
+    ];
+    $storage->write('document.type.agreement', $data);
+    $this->container->get('config.factory')->reset('document.type.agreement');
+    require_once DRUPAL_ROOT . '/' . $this->container->get('extension.list.module')->getPath('document') . '/document.install';
+    document_update_10002();
+    $config = $this->container->get('config.factory')->get('document.type.agreement');
+    $this->assertNull($config->get('review'));
+    $this->assertSame('Existing instructions', $config->get('reviews.staff.instructions'));
+    $this->assertSame('Incomplete', $config->get('reviews.staff.options.incomplete'));
+    $this->assertSame('review documents as staff', $config->get('reviews.staff.permission'));
+    $this->assertConfigSchema($this->container->get('config.typed'), 'document.type.agreement', $config->getRawData());
   }
 
 }

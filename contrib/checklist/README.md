@@ -10,17 +10,18 @@ review:
   label: Review the agreement
   handler: document_review
   handler_configuration:
-    role: client
+    role: debtor
     context_mapping:
       document: 'task_context:document'
 ```
 
 The ordinary Typed Data Plus context-mapping widget selects the document. A
 checklist template can map `template_context:document` instead, so the existing
-collection expansion can create one review item per document. The role belongs
-to trusted job/item configuration; assigning a client role here does not grant
-access or select another person to impersonate. The host checklist's assignment
-and access controls determine who can act.
+collection expansion can create one review item per document. The `role` selects
+a named review defined by the mapped document's type. The type owns its reviewer eligibility: a permission for staff, or a related user resolved
+through the standard context handler. The current actor must satisfy that rule
+and the host checklist's access controls. A missing definition or relationship
+does not fall back to a generic review.
 
 Opening the item shows the document type's instructions and a submit button for
 each named decision, with an optional reason. The shared resource pane renders
@@ -42,8 +43,10 @@ required fingerprint. Submit that fingerprint with the decision:
 }
 ```
 
-The form and API call the same operation. Unknown parameters, including reviewer
-or role overrides, are rejected. The handler rechecks host access, applicability,
+The form and API call the same operation. API callers may additionally supply an
+`analysis` object matching the named definition's JSON schema; the human form does
+not require automated analysis. The operation schema exposes that optional input.
+Unknown parameters, including reviewer or role overrides, are rejected. The handler rechecks host access, applicability,
 actionability, document access and the current document fingerprint. A changed
 revision or file set requires a fresh review; an old open form cannot approve a
 replacement. The review and checklist completion are committed together.
@@ -65,4 +68,7 @@ create an automatic worker attempt solely to collect a human decision.
 document, shared form/operation behavior, persisted typed outcomes, schema,
 unchanged aggregate status, stale files, unauthorized access, identity spoofing,
 separate attempts, immutable evidence and duplicate receipts. The Common workflow
-runs it on SQLite and MySQL.
+runs it on SQLite and MySQL, along with named-review eligibility, current-version
+requirements, prompt preparation, schema validation and upgrade coverage.
+`tests/src/Functional/ReviewDefinitionFormTest.php` tests type creation, named
+requirements, the reviewer-mapping rebuild, parent saves and invalid schema input.
