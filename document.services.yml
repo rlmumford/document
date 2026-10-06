@@ -1,0 +1,4 @@
+services:
+  document.reviewer:
+    class: Drupal\document\DocumentReviewer
+    arguments: ['@entity_type.manager', '@current_user']

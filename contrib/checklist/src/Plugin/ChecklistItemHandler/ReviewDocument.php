@@ -1,0 +1,224 @@
+<?php
+
+namespace Drupal\document_checklist\Plugin\ChecklistItemHandler;
+
+use Drupal\checklist\ChecklistActionResource;
+use Drupal\checklist\ChecklistActionState;
+use Drupal\checklist\Plugin\ChecklistItemHandler\ActionStateChecklistItemHandlerInterface;
+use Drupal\checklist\Entity\ChecklistItemInterface;
+use Drupal\checklist\Plugin\ChecklistItemHandler\ContextAwareChecklistItemHandlerBase;
+use Drupal\checklist\Plugin\ChecklistItemHandler\ChecklistItemHandlerInterface;
+use Drupal\checklist\Plugin\ChecklistItemHandler\InteractiveChecklistItemHandlerInterface;
+use Drupal\checklist\Plugin\ChecklistItemHandler\ExpectedOutcomeChecklistItemHandlerInterface;
+use Drupal\checklist\Plugin\ChecklistItemHandler\ActionOperationsChecklistItemHandlerInterface;
+use Drupal\checklist\Plugin\ChecklistItemHandler\ActionResourceChecklistItemHandlerInterface;
+use Drupal\Core\Entity\EntityTypeManagerInterface;
+use Drupal\Core\Entity\TypedData\EntityDataDefinition;
+use Drupal\Core\Database\Connection;
+use Drupal\Core\TypedData\DataDefinition;
+use Drupal\document\DocumentReviewer;
+use Drupal\checklist\Attempt\ChecklistAttemptJournal;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
+
+/**
+ * Records a human review using the document type's review policy.
+ *
+ * @ChecklistItemHandler(
+ *   id = "document_review",
+ *   label = @Translation("Review document"),
+ *   category = @Translation("Document"),
+ *   context_definitions = {
+ *     "document" = @ContextDefinition("entity:document", required = TRUE, label = @Translation("Document"))
+ *   },
+ *   forms = {
+ *     "configure" = "\Drupal\document_checklist\PluginForm\ReviewConfigureForm",
+ *     "row" = "\Drupal\checklist\PluginForm\StartableItemRowForm",
+ *     "action" = "\Drupal\document_checklist\PluginForm\ReviewActionForm"
+ *   }
+ * )
+ */
+class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements InteractiveChecklistItemHandlerInterface, ExpectedOutcomeChecklistItemHandlerInterface, ActionOperationsChecklistItemHandlerInterface, ActionResourceChecklistItemHandlerInterface, ActionStateChecklistItemHandlerInterface {
+
+  /**
+   * Records reviews.
+   */
+  protected DocumentReviewer $reviewer;
+  /**
+   * Entity storage and display builders.
+   */
+  protected EntityTypeManagerInterface $entityTypes;
+  /**
+   * Atomic review and outcome persistence.
+   */
+  protected Connection $database;
+  /**
+   * Execution provenance.
+   */
+  protected ChecklistAttemptJournal $journal;
+
+  /**
+   * {@inheritdoc}
+   */
+  public static function create(ContainerInterface $container, array $configuration, $plugin_id, $plugin_definition) {
+    $instance = parent::create($container, $configuration, $plugin_id, $plugin_definition);
+    $instance->reviewer = $container->get('document.reviewer');
+    $instance->entityTypes = $container->get('entity_type.manager');
+    $instance->database = $container->get('database');
+    $instance->journal = $container->get('checklist.attempt_journal');
+    return $instance;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function defaultConfiguration() {
+    return ['role' => 'staff'] + parent::defaultConfiguration();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getMethod(): string {
+    return ChecklistItemInterface::METHOD_INTERACTIVE;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function action(): ChecklistItemHandlerInterface {
+    return $this;
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function expectedOutcomeDefinitions(): array {
+    // The document type is selected through runtime contexts. The review keeps
+    // the historical choice label even if that type's choices later change.
+    return [
+      'decision' => DataDefinition::create('string')->setLabel($this->t('Decision')),
+      'review' => EntityDataDefinition::create('document_review')->setLabel($this->t('Review')),
+      'document' => EntityDataDefinition::create('document')->setLabel($this->t('Reviewed document')),
+    ];
+  }
+
+  /**
+   * Gets current policy and a token identifying the document shown to the user.
+   */
+  public function reviewInput(): array {
+    $item = $this->getItem();
+    if (!$item->get('checklist')->checklist->getEntity()->access('update')) {
+      throw new AccessDeniedHttpException('The checklist cannot be updated.');
+    }
+    if (!$item->isIncomplete() || $item->isApplicable() !== TRUE || !$item->isActionable()) {
+      throw new \DomainException('The document review is not actionable.');
+    }
+    $document = $this->reviewer->load($this->getContextValue('document'));
+    return $this->reviewer->policy($document) + [
+      'fingerprint' => $this->reviewer->fingerprint($document),
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function actionOperations(): array {
+    try {
+      $input = $this->reviewInput();
+    }
+    catch (AccessDeniedHttpException | \DomainException) {
+      return [];
+    }
+    return [
+      'review' => [
+        'label' => (string) $this->t('Record review'),
+        'description' => $input['instructions'],
+        'parameters_schema' => [
+          'type' => 'object',
+          'properties' => [
+            'decision' => [
+              'type' => 'string',
+              'enum' => array_keys($input['options']),
+              'x-enum-labels' => array_values($input['options']),
+            ],
+            'fingerprint' => ['type' => 'string', 'const' => $input['fingerprint']],
+            'reason' => ['type' => 'string'],
+          ],
+          'required' => ['decision', 'fingerprint'],
+          'additionalProperties' => FALSE,
+        ],
+        'result_schema' => [
+          'type' => 'object',
+          'properties' => ['review_uuid' => ['type' => 'string'], 'decision' => ['type' => 'string']],
+          'required' => ['review_uuid', 'decision'],
+          'additionalProperties' => FALSE,
+        ],
+      ],
+    ];
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function executeActionOperation(string $operation, array $parameters): array {
+    if ($operation !== 'review' || array_diff(array_keys($parameters), ['decision', 'fingerprint', 'reason']) || !is_string($parameters['decision'] ?? NULL) || !is_string($parameters['fingerprint'] ?? NULL) || !is_string($parameters['reason'] ?? '')) {
+      throw new \InvalidArgumentException('Provide a decision, document fingerprint and optional reason.');
+    }
+    $this->reviewInput();
+    $transaction = $this->database->startTransaction();
+    try {
+      $item = $this->getItem();
+      $document = $this->getContextValue('document');
+      $review = $this->reviewer->record($document, $parameters['fingerprint'], $parameters['decision'], $this->getConfiguration()['role'], $parameters['reason'] ?? '', $item->uuid(), $this->journal->latest($item)?->id ?? '');
+      $item->setOutcome('review', $review);
+      $item->setOutcome('document', $document);
+      $item->setOutcome('decision', $parameters['decision']);
+      $item->setComplete(ChecklistItemInterface::METHOD_INTERACTIVE)->save();
+      return ['review_uuid' => $review->uuid(), 'decision' => $parameters['decision']];
+    }
+    catch (\Throwable $exception) {
+      $transaction->rollBack();
+      throw $exception;
+    }
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getActionState(): ?ChecklistActionState {
+    if (!$this->getItem()->isComplete()) {
+      return NULL;
+    }
+    $review = $this->getItem()->get('outcomes')->get('review')->getValue();
+    if (!$review || !$review->access('view')) {
+      return NULL;
+    }
+    $reviewer = $review->get('reviewer')->entity;
+    return new ChecklistActionState(
+      stage: 'reviewed',
+      message: (string) $this->t('@decision — @reviewer (@role)', [
+        '@decision' => $review->get('decision_label')->value,
+        '@reviewer' => $reviewer ? $reviewer->label() : $this->t('Deleted account'),
+        '@role' => $review->get('role')->value,
+      ]),
+      updatedAt: (int) $review->get('created')->value,
+    );
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  public function getActionResource(): ?ChecklistActionResource {
+    if (!$this->getContext('document')->hasContextValue()) {
+      return NULL;
+    }
+    $document = $this->getContextValue('document');
+    $document = $document->id() ? $this->entityTypes->getStorage('document')->loadUnchanged($document->id()) : NULL;
+    if (!$document || !$document->access('view')) {
+      return NULL;
+    }
+    return new ChecklistActionResource('document:' . $document->uuid(), $this->entityTypes->getViewBuilder('document')->view($document), (string) $this->t('Document'), closeable: FALSE, pinned: TRUE);
+  }
+
+}

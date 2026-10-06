@@ -4,4 +4,6 @@ type: module
 core_version_requirement: ^9 || ^10 || ^11 || ^9
 dependencies:
   - drupal:file
+  - drupal:text
+  - drupal:options
   - entity:entity

@@ -1,0 +1,7 @@
+checklist_item_handler.document_review:
+  type: checklist_item_handler
+  label: 'Review document'
+  mapping:
+    role:
+      type: string
+      label: 'Reviewing role'

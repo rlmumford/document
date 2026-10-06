@@ -17,3 +17,5 @@ delete any document:
   title: 'Delete any document'
 delete own document:
   title: 'Delete own documents'
+review documents:
+  title: 'Record document reviews'

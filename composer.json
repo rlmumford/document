@@ -13,7 +13,8 @@
         "drupal/entity": "^1.4"
     },
     "suggest": {
-        "drupal/pdf_tools": "Required by the document_generation submodule."
+        "drupal/pdf_tools": "Required by the document_generation submodule.",
+        "rlmumford/checklist": "Required by the document_checklist submodule."
     },
     "minimum-stability": "dev"
 }

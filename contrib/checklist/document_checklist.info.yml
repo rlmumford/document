@@ -1,0 +1,7 @@
+name: Document Checklist
+type: module
+description: 'Review documents through checklist forms and action operations.'
+core_version_requirement: ^10 || ^11
+dependencies:
+  - document:document
+  - checklist:checklist

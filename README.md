@@ -111,3 +111,39 @@ was made, which is the only thing anybody wants from it.
 Who and when are stamped on every new revision, not only the ones made through
 a form - otherwise a revision created by an update hook or a migration has no
 author and no date.
+
+## Individual reviews
+
+`document_review` records one person's review, not an aggregate document status.
+It stores the document and reviewed revision, the executing user, their reviewing
+role (a workflow capacity such as `staff` or `client`, not a Drupal role), the
+machine decision and its label at that time, reason, timestamp and a fingerprint
+of the revision and file references. It also accepts opaque source/attempt IDs.
+Records cannot be updated through entity storage. Separate people, roles and
+attempts create separate evidence; old decisions are not overwritten.
+
+The `document.reviewer` service is the write boundary. It reloads the document,
+requires an authenticated user with `review documents` and document view access,
+checks the submitted fingerprint and validates the decision against the document
+type's current review options. The user is taken from the executing account,
+never from submitted parameters. Trusted callers supply and authorize the role.
+A unique receipt prevents a source/attempt from recording duplicate evidence.
+Calls without a source can independently record multiple reviews.
+
+Document types own human review instructions and `machine_name|Label` choices.
+These are edited on the document type form and exported with its configuration.
+Historical review labels survive later changes to those choices.
+
+Reviewing does **not** update `document.status`. A later approval policy can
+require, for example, two distinct clients' approvals on the same document
+version. Counting the latest decision alone would be incorrect. Approval
+aggregation, replacement requests, AI prompts and automated review are outside
+this first slice.
+
+The fingerprint identifies the revision and ordered `file`/`files` field values;
+it is not a hash of file bytes. Files should be replaced with new managed-file
+identities rather than modified in place. The review is evidence of the version
+seen, not a substitute for preserving document revisions and managed files.
+
+`document_update_10001()` installs the review entity for existing installations.
+Enable the optional `document_checklist` submodule for checklist integration.

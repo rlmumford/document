@@ -11,3 +11,16 @@ document.type.*:
     description:
       type: text
       label: 'Description'
+    review:
+      type: mapping
+      label: 'Review policy'
+      mapping:
+        instructions:
+          type: text
+          label: 'Review instructions'
+        options:
+          type: sequence
+          label: 'Decisions'
+          sequence:
+            type: label
+            label: 'Decision label'

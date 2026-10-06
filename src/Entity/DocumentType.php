@@ -41,6 +41,7 @@ use Drupal\Core\Config\Entity\ConfigEntityBundleBase;
  *     "id",
  *     "label",
  *     "description",
+ *     "review",
  *   },
  *   links = {
  *     "add-form" = "/admin/structure/document-types/add",
@@ -72,6 +73,23 @@ class DocumentType extends ConfigEntityBundleBase {
    * @var string
    */
   protected $description;
+
+  /**
+   * Human review policy shared by every document of this type.
+   *
+   * @var array
+   */
+  protected $review = [
+    'instructions' => 'Review the document and record your decision.',
+    'options' => ['approved' => 'Approve', 'rejected' => 'Reject'],
+  ];
+
+  /**
+   * Gets the review instructions and machine-named choices.
+   */
+  public function getReview(): array {
+    return $this->review;
+  }
 
   /**
    * Gets the description.

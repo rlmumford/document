@@ -1,0 +1,16 @@
+<?php
+
+/**
+ * @file
+ * Document schema updates.
+ */
+
+/**
+ * Installs individual document review records on existing sites.
+ */
+function document_update_10001() {
+  $manager = \Drupal::entityDefinitionUpdateManager();
+  if (!$manager->getEntityType('document_review')) {
+    $manager->installEntityType(\Drupal::entityTypeManager()->getDefinition('document_review'));
+  }
+}
