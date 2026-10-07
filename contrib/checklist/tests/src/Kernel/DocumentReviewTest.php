@@ -2,6 +2,9 @@
 
 namespace Drupal\Tests\document_checklist\Kernel;
 
+use Symfony\Component\HttpFoundation\Request;
+use Drupal\document_checklist\Controller\ReviewHistoryController;
+use Drupal\checklist\Event\ChecklistEvents;
 use Drupal\document\Event\ReviewRequirementsCompleted;
 use Drupal\Core\Form\FormState;
 use Drupal\Core\Plugin\Context\EntityContext;
@@ -108,6 +111,39 @@ class DocumentReviewTest extends KernelTestBase {
     $handler = $user->work->checklist->getItem('review')->getHandler();
     $handler->setContextValue('document', $this->document);
     return $handler;
+  }
+
+  /**
+   * Resource history resolves the item's document and enforces host access.
+   */
+  public function testHistoryResource(): void {
+    $handler = $this->handler();
+    $item = $handler->getItem();
+    $host = $item->get('checklist')->checklist->getEntity();
+    $configuration = $host->get('work')->first()->getValue();
+    $configuration['configuration']['default_items']['review']['handler_configuration']['context_mapping']['document'] = 'history_document';
+    $host->set('work', $configuration)->save();
+    $this->container->get('event_dispatcher')->addListener(ChecklistEvents::COLLECT_RUNTIME_CONTEXTS, function ($event) {
+      $event->addContext('history_document', EntityContext::fromEntity($this->document));
+    });
+    $reviewer = $this->container->get('document.reviewer');
+    $reviewer->record($this->document, $reviewer->fingerprint($this->document), 'approved', 'client', 'History evidence');
+    $controller = ReviewHistoryController::create($this->container);
+    $request = Request::create('/');
+    $build = $controller->view($request, 'user', $host->id(), 'work:0', 'review');
+    $this->assertCount(2, $build['reviews']);
+    $entries = array_filter($build['reviews'], 'is_array');
+    $this->assertSame('History evidence', reset($entries)['reason']['text']['#plain_text']);
+    $request->query->set('_wrapper_format', 'drupal_ajax');
+    $response = $controller->view($request, 'user', $host->id(), 'work:0', 'review');
+    $commands = $response->getCommands();
+    $this->assertSame('checklistOpenResource', $commands[0]['command']);
+    $this->assertStringContainsString('History evidence', $commands[0]['data']);
+    $this->assertStringContainsString('data-checklist-history', $commands[0]['data']);
+    $this->container->get('current_user')->setAccount(new AnonymousUserSession());
+    $this->container->get('entity_type.manager')->getAccessControlHandler('user')->resetCache();
+    $this->expectException(AccessDeniedHttpException::class);
+    $controller->view($request, 'user', $host->id(), 'work:0', 'review');
   }
 
   /**

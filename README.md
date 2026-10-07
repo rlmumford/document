@@ -281,3 +281,25 @@ requiring that guarantee must check current requirements before acting.
 
 Neither the event nor the summary changes `document.status`. Partial/incomplete
 follow-up requests, status policy and AI execution remain separate integrations.
+
+## Review history
+
+Document views include a small **Review history** link alongside the Required
+reviews component. `/document/{document}/reviews` displays up to 25 records per
+page, most recently recorded first, with stable review-ID pagination. Each entry
+shows the recorded decision and role labels, actual reviewer, review time, reason,
+and whether its fingerprint matches the current document version. Labels are
+historical; reviewer names are current account labels, or `User N` when the account
+is deleted or cannot be viewed. Raw analysis and analysis schemas are not shown.
+
+History is evidence, not a second approval summary: multiple decisions may concern
+the current version, and changes to required reviewers or type policy can change
+which evidence satisfies a requirement. **Required reviews** remains the source
+for current approval progress. Reading history never records a review, changes a
+document's status, or completes checklist work.
+
+The `document.review_history` builder requires document-view access and filters
+individual reviews through their access handler. A viewer does not need permission
+to perform reviews. The page is not cached, so permissions and version comparisons
+are reevaluated. `document_checklist` adds a resource-pane adapter; the document
+module itself has no checklist dependency.

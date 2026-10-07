@@ -1,0 +1,25 @@
+.document-review-history-entry {
+  padding: 1rem 0;
+  border-bottom: 1px solid #d3d8dd;
+}
+.document-review-history-entry h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+.document-review-history-entry p {
+  margin: 0.35rem 0;
+}
+.document-review-history-version {
+  color: #545b64;
+  font-size: 0.875rem;
+}
+.document-review-history-reason {
+  margin-top: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.document-review-history-navigation {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}

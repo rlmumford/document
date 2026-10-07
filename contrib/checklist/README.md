@@ -72,3 +72,18 @@ runs it on SQLite and MySQL, along with named-review eligibility, current-versio
 requirements, prompt preparation, schema validation and upgrade coverage.
 `tests/src/Functional/ReviewDefinitionFormTest.php` tests type creation, named
 requirements, the reviewer-mapping rebuild, parent saves and invalid schema input.
+
+## Review history resource
+
+The document resource's small **Review history** link opens a separate resource
+pane tab, using the same responsive navigation as other checklist resources. It
+retains the checklist form and any unsaved input. Without JavaScript the link
+opens a standalone history page. Pagination stays in the resource pane when
+opened there.
+
+The read-only HTML/AJAX route resolves the document from the saved checklist item's
+normal context mapping. It checks host, field and item visibility, then delegates
+to the document-owned history builder for document/review access and rendering.
+Callers cannot supply a different document or a resource-pane selector. This is
+separate from the item's **History** link, which shows checklist execution attempts.
+No new operation or `checklist_api` endpoint is introduced.

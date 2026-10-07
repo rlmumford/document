@@ -16,6 +16,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Entity\TypedData\EntityDataDefinition;
 use Drupal\Core\Database\Connection;
 use Drupal\Core\TypedData\DataDefinition;
+use Drupal\Core\Url;
 use Drupal\document\DocumentReviewer;
 use Drupal\document\Review\AnalysisSchema;
 use Drupal\checklist\Attempt\ChecklistAttemptJournal;
@@ -240,7 +241,21 @@ class ReviewDocument extends ContextAwareChecklistItemHandlerBase implements Int
     if (!$document || !$document->access('view')) {
       return NULL;
     }
-    return new ChecklistActionResource('document:' . $document->uuid(), $this->entityTypes->getViewBuilder('document')->view($document), (string) $this->t('Document'), closeable: FALSE, pinned: TRUE);
+    $build = $this->entityTypes->getViewBuilder('document')->view($document);
+    $item = $this->getItem();
+    $checklist = $item->get('checklist')->checklist;
+    $host = $checklist->getEntity();
+    if ($host->id() && $item->access('view action state')) {
+      $build['#document_review_history_url'] = Url::fromRoute('document_checklist.review_history', [
+        'entity_type' => $host->getEntityTypeId(),
+        'entity_id' => $host->id(),
+        'checklist' => $checklist->getKey(),
+        'item_name' => $item->getName(),
+      ]);
+      // The link depends on the checklist address, not just this document.
+      $build['#cache']['max-age'] = 0;
+    }
+    return new ChecklistActionResource('document:' . $document->uuid(), $build, (string) $this->t('Document'), closeable: FALSE, pinned: TRUE);
   }
 
 }

@@ -1,0 +1,11 @@
+document_checklist.review_history:
+  path: '/checklist/{entity_type}/{entity_id}/{checklist}/{item_name}/document-reviews'
+  defaults:
+    _controller: '\Drupal\document_checklist\Controller\ReviewHistoryController::view'
+    _title: 'Review history'
+  methods: [GET, POST]
+  requirements:
+    # The controller enforces host, field, item and document access.
+    _access: 'TRUE'
+  options:
+    no_cache: TRUE

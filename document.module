@@ -7,6 +7,7 @@
 
 use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
 use Drupal\Core\Entity\EntityInterface;
+use Drupal\Core\Url;
 
 /**
  * Implements hook_entity_extra_field_info().
@@ -30,6 +31,16 @@ function document_entity_extra_field_info(): array {
 function document_document_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode): void {
   if (!$display->getComponent('review_requirements') || !$entity->access('view')) {
     return;
+  }
+  if ($entity->id()) {
+    $build['review_history'] = [
+      '#type' => 'link',
+      '#title' => t('Review history'),
+      '#url' => $build['#document_review_history_url'] ?? Url::fromRoute('document.review_history', ['document' => $entity->id()]),
+      '#weight' => 21,
+      '#attributes' => ['class' => isset($build['#document_review_history_url']) ? ['use-ajax'] : []],
+      '#attached' => ['library' => ['core/drupal.ajax']],
+    ];
   }
   $summary = \Drupal::service('document.reviewer')->summary($entity);
   $rows = [];

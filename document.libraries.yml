@@ -1,0 +1,4 @@
+review_history:
+  css:
+    component:
+      css/review-history.css: {}

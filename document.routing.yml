@@ -22,3 +22,16 @@ document.review_definition.edit:
     parameters:
       document_type:
         type: entity:document_type
+
+document.review_history:
+  path: '/document/{document}/reviews'
+  defaults:
+    _controller: '\Drupal\document\Controller\ReviewHistoryController::view'
+    _title: 'Review history'
+  requirements:
+    _entity_access: 'document.view'
+  options:
+    parameters:
+      document:
+        type: entity:document
+    no_cache: TRUE
