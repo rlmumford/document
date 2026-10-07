@@ -4,6 +4,8 @@ namespace Drupal\Tests\document_checklist\Kernel;
 
 use Drupal\document\Event\ReviewRequirementsCompleted;
 use Drupal\Core\Form\FormState;
+use Drupal\Core\Plugin\Context\EntityContext;
+use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\Core\Entity\EntityStorageException;
 use Drupal\document\Entity\Document;
 use Drupal\document\Entity\DocumentType;
@@ -463,6 +465,58 @@ class DocumentReviewTest extends KernelTestBase {
     $this->assertSame('Incomplete', $config->get('reviews.staff.options.incomplete'));
     $this->assertSame('review documents as staff', $config->get('reviews.staff.permission'));
     $this->assertConfigSchema($this->container->get('config.typed'), 'document.type.agreement', $config->getRawData());
+  }
+
+  /**
+   * Native conditions follow live evidence, including new revisions and denial.
+   */
+  public function testReviewCondition(): void {
+    $handler = $this->handler();
+    $reviewer = $this->container->get('document.reviewer');
+    $manager = $this->container->get('plugin.manager.condition');
+    $condition = $manager->createInstance('document_reviews_approved');
+    $condition->setContextValue('document', $this->document);
+    $this->assertFalse($condition->execute());
+    $this->assertSame(0, $condition->getCacheMaxAge());
+    $this->assertConfigSchema($this->container->get('config.typed'), 'condition.plugin.document_reviews_approved', $condition->getConfiguration());
+    $input = $handler->reviewInput();
+    $handler->executeActionOperation('review', ['decision' => 'approved', 'fingerprint' => $input['fingerprint']]);
+    $this->assertFalse($condition->execute());
+    $reviewer->record($this->document, $input['fingerprint'], 'approved', 'staff');
+    $this->assertTrue($condition->execute());
+    // A later checklist gate maps the document outcome through the shared
+    // context handler, without a second document selector or frozen result.
+    $checklist = $handler->getItem()->get('checklist')->checklist;
+    $configuration = ['id' => 'document_reviews_approved', 'context_mapping' => ['document' => 'item:review:document']];
+    $evaluator = $this->container->get('checklist.condition_evaluator');
+    $this->assertTrue($evaluator->evaluate($checklist, $configuration));
+    $this->document->setNewRevision(TRUE);
+    $this->document->save();
+    $this->assertFalse($condition->execute());
+    $this->assertFalse($evaluator->evaluate($checklist, $configuration));
+    $configuration['negate'] = TRUE;
+    $this->assertTrue($evaluator->evaluate($checklist, $configuration));
+    $type = DocumentType::load('agreement');
+    $type->set('reviews', [])->save();
+    $this->assertFalse($condition->execute());
+    $this->container->get('current_user')->setAccount(new AnonymousUserSession());
+    $this->assertNull($evaluator->evaluate($checklist, $configuration));
+  }
+
+  /**
+   * Tests the standard selector and the declared module dependency.
+   */
+  public function testReviewConditionForm(): void {
+    $condition = $this->container->get('plugin.manager.condition')->createInstance('document_reviews_approved');
+    $context = EntityContext::fromEntity($this->document);
+    $condition->setExpectedContexts(['source' => $context->getContextDefinition()]);
+    $state = new FormState();
+    $state->setTemporaryValue('gathered_contexts', ['source' => $context]);
+    $form = $condition->buildConfigurationForm([], $state);
+    $this->assertArrayHasKey('document', $form['context_mapping']);
+    $this->assertArrayHasKey('negate', $form);
+    $dependencies = $this->container->get('checklist.condition_evaluator')->calculateDependencies([['id' => 'document_reviews_approved']]);
+    $this->assertContains('document', $dependencies['module']);
   }
 
 }

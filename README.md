@@ -196,6 +196,42 @@ human-record API to pretend a staff member reviewed something they did not. Huma
 confirmation of AI recommendations should link to that analysis/run. Prompt
 configuration alone never grants authority to approve a debtor's document.
 
+## Current-review condition
+
+The native Drupal condition **Document required reviews approved**
+(`document_reviews_approved`) checks whether every required named review is
+approved for the current document version. Its single **Document** input uses
+standard Typed Data Plus context mapping. It is available anywhere native
+conditions are configured: checklist applicability/actionability/required rules,
+templates and job rules. It requires no task integration module.
+
+For a later checklist item, map the document outcome of the review item:
+
+```yaml
+conditions:
+  actionability:
+    id: document_reviews_approved
+    negate: false
+    context_mapping:
+      document: 'item:review:document'
+```
+
+The condition re-reads current evidence instead of relying on the earlier item's
+completion or a remembered event. Replacing the document, changing its required
+reviewer or recording a later rejection can make it false again. Partial and
+incomplete do not satisfy approval. No required definitions also returns false.
+
+Normal Drupal negation is supported. Missing, unsaved, deleted or inaccessible
+documents raise a missing-context result, not false: negation cannot turn an
+unavailable document into a satisfied gate. The checklist evaluator treats that
+result as unresolved. Conditions do not grant review permission or reschedule
+existing tasks by themselves; they are checked when their owning workflow runs.
+
+The result is not cached because evidence and mapped reviewer relationships may
+change independently of the document context. This condition does not reopen
+completed items or retract previously performed actions.
+
+
 ## Updates and integration
 
 `document_update_10001()` installs review storage. `document_update_10002()` adds

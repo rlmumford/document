@@ -54,3 +54,7 @@ document.review_definition:
     analysis_schema:
       type: string
       label: 'Analysis JSON schema'
+
+condition.plugin.document_reviews_approved:
+  type: condition.plugin
+  label: 'Document required reviews approved'
