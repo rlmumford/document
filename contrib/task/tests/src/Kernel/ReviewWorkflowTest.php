@@ -5,6 +5,8 @@ namespace Drupal\Tests\document_task\Kernel;
 use Drupal\document\Entity\Document;
 use Drupal\Core\Database\Database;
 use Drupal\document\Event\ReviewRequirementsCompleted;
+use Drupal\document\Event\ReviewRecorded;
+use Drupal\Core\Entity\EntityStorageException;
 use Drupal\document\Entity\DocumentType;
 use Drupal\KernelTests\KernelTestBase;
 use Drupal\task\Entity\Task;
@@ -23,7 +25,7 @@ class ReviewWorkflowTest extends KernelTestBase {
    */
   protected static $modules = [
     'system', 'user', 'field', 'file', 'text', 'filter', 'options', 'datetime',
-    'entity', 'document', 'document_task', 'task', 'task_dependency',
+    'entity', 'document', 'document_task', 'task', 'task_dependency', 'task_context',
     'task_dependency_job', 'task_job', 'entity_template', 'typed_data',
     'typed_data_plus', 'typed_data_context_assignment', 'checklist',
     'plugin_reference', 'typed_data_reference', 'inline_entity_form',
@@ -117,6 +119,104 @@ class ReviewWorkflowTest extends KernelTestBase {
     $document->save();
     $this->assertSame('pending', $reviewer->summary($document)['status']);
     $this->assertTrue($this->met($tasks[0]));
+    $this->assertSame('received', $document->getStatus());
+  }
+
+  /**
+   * Individual review conditions and mapped outcomes drive follow-up tasks.
+   */
+  public function testDecisionFollowUp(): void {
+    $type = DocumentType::load('agreement');
+    $staff = $type->getReview('staff');
+    $staff['options'] += ['incomplete' => 'Incomplete', 'partial' => 'Partially approved'];
+    $type->set('reviews', ['staff' => $staff, 'client' => ['label' => 'Client review'] + $staff])->save();
+    $job = Job::create([
+      'id' => 'review_follow_up',
+      'label' => 'Follow up document review',
+      'context' => [
+        'document' => ['type' => 'entity:document', 'label' => 'Document', 'required' => TRUE],
+        'review' => ['type' => 'entity:document_review', 'label' => 'Review', 'required' => TRUE],
+      ],
+      'triggers' => [
+        'staff_follow_up' => [
+          'id' => 'document.review_recorded',
+          'key' => 'staff_follow_up',
+          'template' => [
+            'id' => 'default',
+            'uuid' => 'default',
+            'label' => 'Review follow-up',
+            'conditions' => [
+              ['id' => 'condition_string', 'condition_string' => 'review.role.value == "staff"'],
+              ['id' => 'condition_string', 'condition_string' => 'review.decision.value != "approved"'],
+            ],
+            'components' => [
+              'title' => [
+                'id' => 'field.widget_input:task.title',
+                'uuid' => 'title',
+                'field_type' => 'string',
+                'value' => [['value' => 'Follow up {{ document.label.value }}: {{ review.decision_label.value }}']],
+              ],
+              'document' => [
+                'id' => 'task_context.data_select',
+                'uuid' => 'document',
+                'task_context' => 'document',
+                'selector' => 'document',
+              ],
+              'review' => [
+                'id' => 'task_context.data_select',
+                'uuid' => 'review',
+                'task_context' => 'review',
+                'selector' => 'review',
+              ],
+            ],
+          ],
+        ],
+      ],
+    ]);
+    $job->save();
+    $document = Document::create(['type' => 'agreement', 'label' => 'Agreement', 'status' => 'received']);
+    $document->save();
+    $reviewer = $this->container->get('document.reviewer');
+    $fingerprint = $reviewer->fingerprint($document);
+    $tasks = $this->container->get('entity_type.manager')->getStorage('task');
+    foreach (['rejected', 'incomplete', 'partial'] as $decision) {
+      $review = $reviewer->record($document, $fingerprint, $decision, 'staff', 'Follow-up reason', $decision);
+      $created = $tasks->loadByProperties([
+        'job' => $job->id(),
+        'title' => 'Follow up Agreement: ' . $staff['options'][$decision],
+      ]);
+      $this->assertCount(1, $created);
+      $task = reset($created);
+      $this->assertSame($review->id(), $task->get('context')->get('review')->getValue()->id());
+      $this->assertSame($document->id(), $task->get('context')->get('document')->getValue()->id());
+    }
+    $reviewer->record($document, $fingerprint, 'approved', 'staff');
+    $reviewer->record($document, $fingerprint, 'incomplete', 'client');
+    $this->assertCount(3, $tasks->loadByProperties(['job' => $job->id()]));
+    try {
+      $reviewer->record($document, $fingerprint, 'rejected', 'staff', '', 'rejected');
+      $this->fail('A replayed receipt must not create another review or task.');
+    }
+    catch (EntityStorageException) {
+      $this->assertCount(3, $tasks->loadByProperties(['job' => $job->id()]));
+    }
+    // A consumer failure after task creation must undo both task and evidence.
+    $reviews = $this->container->get('entity_type.manager')->getStorage('document_review');
+    $count = count($reviews->loadByProperties(['document' => $document->id()]));
+    $this->container->get('event_dispatcher')->addListener(ReviewRecorded::class, static function () {
+      throw new \RuntimeException('Follow-up failed.');
+    }, -100);
+    try {
+      $reviewer->record($document, $fingerprint, 'incomplete', 'staff');
+      $this->fail('The consumer exception should propagate.');
+    }
+    catch (\RuntimeException $exception) {
+      $this->assertSame('Follow-up failed.', $exception->getMessage());
+    }
+    $tasks->resetCache();
+    $reviews->resetCache();
+    $this->assertCount(3, $tasks->loadByProperties(['job' => $job->id()]));
+    $this->assertCount($count, $reviews->loadByProperties(['document' => $document->id()]));
     $this->assertSame('received', $document->getStatus());
   }
 

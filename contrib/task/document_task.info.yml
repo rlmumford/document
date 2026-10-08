@@ -1,6 +1,6 @@
 name: Document Task
 type: module
-description: 'Connects completed document reviews to task dependencies and job triggers.'
+description: 'Connects document review decisions and completed approvals to job triggers and task dependencies.'
 package: RLMumford
 core_version_requirement: ^10 || ^11
 dependencies:

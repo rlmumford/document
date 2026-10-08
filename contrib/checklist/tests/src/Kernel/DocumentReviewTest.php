@@ -6,6 +6,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Drupal\document_checklist\Controller\ReviewHistoryController;
 use Drupal\checklist\Event\ChecklistEvents;
 use Drupal\document\Event\ReviewRequirementsCompleted;
+use Drupal\document\Event\ReviewRecorded;
 use Drupal\Core\Form\FormState;
 use Drupal\Core\Plugin\Context\EntityContext;
 use Drupal\Core\Session\AnonymousUserSession;
@@ -144,6 +145,29 @@ class DocumentReviewTest extends KernelTestBase {
     $this->container->get('entity_type.manager')->getAccessControlHandler('user')->resetCache();
     $this->expectException(AccessDeniedHttpException::class);
     $controller->view($request, 'user', $host->id(), 'work:0', 'review');
+  }
+
+  /**
+   * The core review event carries authorized evidence without task modules.
+   */
+  public function testReviewRecordedEvent(): void {
+    $handler = $this->handler();
+    $reviewer = $this->container->get('document.reviewer');
+    $events = [];
+    $this->container->get('event_dispatcher')->addListener(ReviewRecorded::class, static function ($event) use (&$events) {
+      $events[] = $event;
+    });
+    $fingerprint = $reviewer->fingerprint($this->document);
+    $review = $reviewer->record($this->document, $fingerprint, 'rejected', 'client', 'Names need correcting.');
+    $this->assertCount(1, $events);
+    $this->assertSame($review, $events[0]->review);
+    $this->assertSame($this->document->id(), $events[0]->document->id());
+    $this->assertSame($handler->getItem()->get('checklist')->checklist->getEntity()->id(), $events[0]->review->get('reviewer')->target_id);
+    $this->assertSame('client', $events[0]->review->get('role')->value);
+    $this->assertSame('rejected', $events[0]->review->get('decision')->value);
+    // Trusted imports of evidence are not authorized workflow occurrences.
+    $review->createDuplicate()->save();
+    $this->assertCount(1, $events);
   }
 
   /**

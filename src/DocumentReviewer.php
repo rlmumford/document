@@ -5,6 +5,7 @@ namespace Drupal\document;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Database\Connection;
 use Drupal\document\Event\ReviewRequirementsCompleted;
+use Drupal\document\Event\ReviewRecorded;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use Drupal\Core\Plugin\Context\ContextHandlerInterface;
 use Drupal\Core\Plugin\Context\EntityContext;
@@ -242,6 +243,7 @@ class DocumentReviewer {
     if (!$complete($before) && $complete($after)) {
       $this->events->dispatch(new ReviewRequirementsCompleted($document, $after));
     }
+    $this->events->dispatch(new ReviewRecorded($document, $review));
     return $review;
   }
 

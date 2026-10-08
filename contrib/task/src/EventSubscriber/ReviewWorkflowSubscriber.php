@@ -4,14 +4,15 @@ namespace Drupal\document_task\EventSubscriber;
 
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\document\Event\ReviewRequirementsCompleted;
+use Drupal\document\Event\ReviewRecorded;
 use Drupal\task_dependency\DependencyManager;
 use Drupal\task_job\Plugin\JobTrigger\JobTriggerManagerInterface;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 
 /**
- * Delivers the same occurrence to existing waits and optional job triggers.
+ * Connects aggregate approval and individual decisions to configured work.
  */
-final class ReviewsCompletedSubscriber implements EventSubscriberInterface {
+final class ReviewWorkflowSubscriber implements EventSubscriberInterface {
 
   public function __construct(protected DependencyManager $dependencies, protected ModuleHandlerInterface $modules, protected ?JobTriggerManagerInterface $jobs = NULL) {}
 
@@ -19,7 +20,20 @@ final class ReviewsCompletedSubscriber implements EventSubscriberInterface {
    * {@inheritdoc}
    */
   public static function getSubscribedEvents(): array {
-    return [ReviewRequirementsCompleted::class => 'completed'];
+    return [
+      ReviewRequirementsCompleted::class => 'completed',
+      ReviewRecorded::class => 'recorded',
+    ];
+  }
+
+  /**
+   * Exposes individual evidence to job conditions and task-template mappings.
+   */
+  public function recorded(ReviewRecorded $event): void {
+    $this->jobs?->handleTrigger('document.review_recorded', [
+      'document' => $event->document,
+      'review' => $event->review,
+    ]);
   }
 
   /**

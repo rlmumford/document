@@ -303,3 +303,62 @@ individual reviews through their access handler. A viewer does not need permissi
 to perform reviews. The page is not cached, so permissions and version comparisons
 are reevaluated. `document_checklist` adds a resource-pane adapter; the document
 module itself has no checklist dependency.
+
+## Individual review follow-up
+
+`document.reviewer::record()` also emits `ReviewRecorded` after each successfully
+recorded decision, carrying the document and the new immutable review entity.
+This occurs after evaluating aggregate completion, inside the same transaction.
+It is available without checklist or task modules. Direct entity imports do not
+emit this event. Replaying a nonempty source/attempt receipt fails before emitting
+another occurrence; intentionally recording another review is a new occurrence.
+
+With `document_task` and `task_job` enabled, **Document review recorded**
+(`document.review_recorded`) is available on the job's Triggers tab. It supplies
+**Reviewed document** (`document`) and **Recorded review** (`review`) contexts to
+the existing condition and Entity Template configuration. For example, two
+condition-string conditions can select an incomplete staff review:
+
+```yaml
+conditions:
+  - id: condition_string
+    condition_string: 'review.role.value == "staff"'
+  - id: condition_string
+    condition_string: 'review.decision.value == "incomplete"'
+```
+
+Define `document` and `review` on the follow-up job's Contexts tab, with types
+`entity:document` and `entity:document_review`. With `task_context` enabled, use
+Task Context (Select) template components to retain the event evidence:
+
+```yaml
+components:
+  document:
+    id: task_context.data_select
+    uuid: document
+    task_context: document
+    selector: document
+  review:
+    id: task_context.data_select
+    uuid: review
+    task_context: review
+    selector: review
+```
+
+The follow-up checklist can then use `task_context:document` and
+`task_context:review`, including selectors for `review.reason.value`,
+`review.reviewer.entity`, and the recorded machine decision. Template placeholders
+can use `{{document.label.value}}` and `{{review.decision_label.value}}`.
+
+The event does not create a replacement request, narrow a partially approved
+scope, change document status, or choose a follow-up assignee by itself. Those
+choices belong to the configured job/template and assignment rules. Review roles
+and decisions are configurable machine names; they are not hardcoded trigger
+variants. A later approval does not erase previously created follow-up work.
+
+Follow-up database writes and evidence commit together. A failing subscriber
+rolls both back. Subscribers must enqueue external work for after commit, rather
+than sending communication or invoking external systems inside this transaction.
+The existing `document.reviews_completed` dependency occurrence remains the
+separate signal that every required review is approved. An individual review
+trigger is not an aggregate-approval gate.
