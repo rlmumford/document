@@ -5,3 +5,8 @@ checklist_item_handler.document_review:
     role:
       type: string
       label: 'Reviewing role'
+    context_mapping:
+      type: sequence
+      label: 'Document context mapping'
+      sequence:
+        type: string
