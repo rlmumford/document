@@ -97,13 +97,13 @@ class ReviewWorkflowTest extends KernelTestBase {
     $this->assertFalse($this->met($tasks[0]));
     $task_storage = $this->container->get('entity_type.manager')->getStorage('task');
     $task_storage->resetCache();
-    $this->assertCount(0, $task_storage->loadByProperties(['job' => $job->id()]));
+    $this->assertCount(0, $task_storage->loadByProperties($job->getTaskQueryConditions()));
     $reviewer->record($document, $fingerprint, 'approved', 'staff');
     $this->assertTrue($this->met($tasks[0]));
     $this->assertFalse($this->met($tasks[1]));
-    $this->assertCount(1, $task_storage->loadByProperties(['job' => $job->id()]));
+    $this->assertCount(1, $task_storage->loadByProperties($job->getTaskQueryConditions()));
     $reviewer->record($document, $fingerprint, 'approved', 'staff');
-    $this->assertCount(1, $task_storage->loadByProperties(['job' => $job->id()]));
+    $this->assertCount(1, $task_storage->loadByProperties($job->getTaskQueryConditions()));
     $scheduler = $this->container->get('task_dependency.scheduler');
     foreach ($this->container->get('task_dependency.workflow')->reserve() as $message) {
       $scheduler->run($message);
@@ -192,13 +192,13 @@ class ReviewWorkflowTest extends KernelTestBase {
     }
     $reviewer->record($document, $fingerprint, 'approved', 'staff');
     $reviewer->record($document, $fingerprint, 'incomplete', 'client');
-    $this->assertCount(3, $tasks->loadByProperties(['job' => $job->id()]));
+    $this->assertCount(3, $tasks->loadByProperties($job->getTaskQueryConditions()));
     try {
       $reviewer->record($document, $fingerprint, 'rejected', 'staff', '', 'rejected');
       $this->fail('A replayed receipt must not create another review or task.');
     }
     catch (EntityStorageException) {
-      $this->assertCount(3, $tasks->loadByProperties(['job' => $job->id()]));
+      $this->assertCount(3, $tasks->loadByProperties($job->getTaskQueryConditions()));
     }
     // A consumer failure after task creation must undo both task and evidence.
     $reviews = $this->container->get('entity_type.manager')->getStorage('document_review');
@@ -215,7 +215,7 @@ class ReviewWorkflowTest extends KernelTestBase {
     }
     $tasks->resetCache();
     $reviews->resetCache();
-    $this->assertCount(3, $tasks->loadByProperties(['job' => $job->id()]));
+    $this->assertCount(3, $tasks->loadByProperties($job->getTaskQueryConditions()));
     $this->assertCount($count, $reviews->loadByProperties(['document' => $document->id()]));
     $this->assertSame('received', $document->getStatus());
   }
