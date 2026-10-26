@@ -1,0 +1,63 @@
+<?php
+
+/**
+ * @file
+ * Exposes saved document contexts and checklist outcomes through Views.
+ */
+
+use Drupal\Core\Entity\Display\EntityViewDisplayInterface;
+use Drupal\Core\Entity\EntityInterface;
+use Drupal\task\TaskInterface;
+
+/**
+ * Implements hook_entity_extra_field_info().
+ */
+function document_task_links_entity_extra_field_info(): array {
+  $fields = [];
+  foreach (\Drupal::service('entity_type.bundle.info')->getBundleInfo('document') as $bundle => $info) {
+    $fields['document'][$bundle]['display']['related_tasks'] = [
+      'label' => t('Related tasks'),
+      'weight' => 30,
+      'visible' => TRUE,
+    ];
+  }
+  return $fields;
+}
+
+/**
+ * Implements hook_document_view().
+ */
+function document_task_links_document_view(array &$build, EntityInterface $entity, EntityViewDisplayInterface $display, $view_mode): void {
+  if ($display->getComponent('related_tasks') && $entity->access('view')) {
+    $build['related_tasks'] = [
+      '#type' => 'details',
+      '#title' => t('Related tasks'),
+      '#open' => TRUE,
+      '#cache' => ['max-age' => 0],
+      'tasks' => [
+        '#type' => 'view',
+        '#name' => 'document_related_tasks',
+        '#display_id' => 'embed',
+        '#arguments' => [(string) $entity->id()],
+      ],
+    ];
+  }
+}
+
+/**
+ * Implements hook_task_ui_task_summary_alter().
+ */
+function document_task_links_task_ui_task_summary_alter(array &$build, TaskInterface $task): void {
+  $build['documents'] = \Drupal::service('document_task_links.presentation')->documents($task);
+}
+
+/**
+ * Implements hook_views_data_alter().
+ */
+function document_task_links_views_data_alter(array &$data): void {
+  $data['task']['document_task_links'] = [
+    'title' => t('Related document'),
+    'argument' => ['id' => 'document_task_links', 'real field' => 'id'],
+    'field' => ['id' => 'document_task_links', 'real field' => 'id'],
+  ];
+}
