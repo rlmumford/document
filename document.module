@@ -63,3 +63,10 @@ function document_document_view(array &$build, EntityInterface $entity, EntityVi
     '#cache' => ['max-age' => 0],
   ];
 }
+
+/**
+ * Implements hook_entity_type_build().
+ */
+function document_entity_type_build(array &$types): void {
+  $types['document']->set('task_related', TRUE);
+}

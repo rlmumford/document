@@ -17,8 +17,7 @@
     "suggest": {
         "drupal/pdf_tools": "Required by the document_generation submodule.",
         "rlmumford/checklist": "Required by the document_checklist submodule.",
-        "rlmumford/task": "Required by the document_task submodule.",
-        "rlmumford/typed_reference_index": "Required by the document_task_links submodule."
+        "rlmumford/task": "Required by the document_task submodule."
     },
     "minimum-stability": "dev"
 }

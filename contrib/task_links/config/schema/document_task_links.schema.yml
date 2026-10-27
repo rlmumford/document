@@ -1,6 +1,0 @@
-views.argument.document_task_links:
-  type: views_argument
-  label: Related document argument
-views.field.document_task_links:
-  type: views_field
-  label: Document contexts and outcomes
