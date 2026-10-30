@@ -29,6 +29,13 @@ class DocumentReviewer {
   public function __construct(protected EntityTypeManagerInterface $entityTypes, protected AccountProxyInterface $account, protected ContextHandlerInterface $contexts, protected PlaceholderResolver $placeholders, protected Connection $database, protected EventDispatcherInterface $events) {}
 
   /**
+   * Allows applications to evaluate review permissions in the document scope.
+   */
+  protected function hasPermission(DocumentInterface $document, string $permission): bool {
+    return $this->account->hasPermission($permission);
+  }
+
+  /**
    * Reloads the current document and enforces review access.
    */
   public function load(DocumentInterface $document): DocumentInterface {
@@ -36,7 +43,7 @@ class DocumentReviewer {
     if (!$document) {
       throw new \DomainException('The document no longer exists.');
     }
-    if (!$this->account->isAuthenticated() || !$this->account->hasPermission('review documents') || !$document->access('view', $this->account)) {
+    if (!$this->account->isAuthenticated() || !$this->hasPermission($document, 'review documents') || !$document->access('view', $this->account)) {
       throw new AccessDeniedHttpException('You cannot review this document.');
     }
     return $document;
@@ -93,7 +100,7 @@ class DocumentReviewer {
       throw new AccessDeniedHttpException('The required reviewer could not be resolved.', $exception);
     }
     if ($definition['eligibility'] === 'permission') {
-      if (empty($definition['permission']) || !$this->account->hasPermission($definition['permission'])) {
+      if (empty($definition['permission']) || !$this->hasPermission($document, $definition['permission'])) {
         throw new AccessDeniedHttpException('You cannot perform this named review.');
       }
     }
